@@ -80,11 +80,13 @@ func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger)
 		log.ErrorContext(ctx, "Error checking model dir", "err", err)
 		return
 	}
-	if exists || !empty {
+
+	if exists && !empty {
 		log.InfoContext(ctx, "Model dir exists and is not empty, ignoring initial training")
 		return
 	}
-	log.InfoContext(ctx, "Model dir is empty, run initial training")
+
+	log.InfoContext(ctx, "Model dir is empty or does not exist, run initial training")
 	executeTraining(ctx, log)
 }
 
@@ -118,8 +120,8 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 		return false, false, err
 	}
 
-	for _, e := range entries {
-		if e.Name() == "lost+found" {
+	for _, entry := range entries {
+		if entry.Name() == "lost+found" {
 			continue
 		}
 		return true, false, nil
