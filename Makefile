@@ -92,11 +92,13 @@ docker-login:
 docker-push-image: docker-login
 	echo "🐳 Building and pushing Docker image $(CURRENT_IMAGE) ...";
 	docker buildx build \
-		--platform linux/arm64 \
-		-t $(CURRENT_IMAGE) \
-		-f $(DOCKERFILE) \
-		--push \
-		.
+      --builder rpi-container-builder \
+      --platform linux/arm64 \
+      -t ghcr.io/bruli/watersystem-ml:0.1.0 \
+      -f Dockerfile \
+      --cache-to=type=registry,ref=ghcr.io/bruli/watersystem-ml:0.1.0-buildcache,mode=max \
+      --cache-from=type=registry,ref=ghcr.io/bruli/watersystem-ml:0.1.0-buildcache \
+      --push .
 	 echo "✅ Image $(CURRENT_IMAGE) pushed successfully."
 
 # ────────────────────────────────────────────────────────────────

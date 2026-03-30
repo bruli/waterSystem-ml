@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    namespace: watersystem-ml
+    labels:
+        app: watersystem-ml
+    name: watersystem-ml
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: watersystem-ml
+  strategy:
+      type: Recreate
+  template:
+    metadata:
+      labels:
+        app: watersystem-ml
+    spec:
+      containers:
+      - image: ghcr.io/bruli/watersystem-ml:0.6.1
+        name: watersystem-ml
+        imagePullPolicy: IfNotPresent
+        ports:
+            - name: http
+              containerPort: 8080
+        volumeMounts:
+            - name: models
+              mountPath: /models
+        env:
+            - name: SERVER_HOST
+              value: :8080
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.observability.svc.cluster.local:4318
+            - name: OTEL_TRACES_SAMPLER
+              value: always_on
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: grpc
+            - name : MODEL_DIR
+              value: /models
+            - name: INFLUXDB_URL
+              value: http://influxdb-influxdb2.influxdb.svc.cluster.local:80
+            - name: INFLUXDB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: watersystem-ml-secret
+                  key: INFLUXDB_TOKEN
+            - name: INFLUXDB_ORG
+              valueFrom:
+                secretKeyRef:
+                  name: watersystem-ml-secret
+                  key: INFLUXDB_ORG
+            - name: INFLUXDB_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: watersystem-ml-secret
+                  key: INFLUXDB_BUCKET
+        readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+        livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+        resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+      volumes:
+          - name: models
+            persistentVolumeClaim:
+                claimName: watersystem-ml-models
