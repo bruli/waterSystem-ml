@@ -1,26 +1,23 @@
-FROM golang:1.26.1 AS go-builder
-
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY cmd ./cmd
-COPY internal ./internal
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/scheduler ./cmd/scheduler
-
-FROM python:3.12-slim
+FROM golang:1.26.1
 
 WORKDIR /app
 
-RUN python -m venv /app/venv
-ENV PATH="/app/venv/bin:$PATH"
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-venv \
+    python3-pip \
+    make \
+    git \
+ && ln -s /usr/bin/python3 /usr/bin/python || true \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY python/requirements.txt /app/python/requirements.txt
-RUN pip install --no-cache-dir -r /app/python/requirements.txt
+COPY python/requirements.txt /tmp/requirements.txt
 
-COPY python /app/python
-COPY --from=go-builder /out/scheduler /app/scheduler
+RUN python3 -m venv /opt/venv
+RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
-ENV PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:${PATH}"
 
-CMD ["/app/scheduler"]
+RUN go install -v github.com/cespare/reflex@latest
+
+ENTRYPOINT ["reflex", "-c", "./reflex.conf"]

@@ -1,0 +1,45 @@
+services:
+  watersystem-ml:
+    build:
+      context: .
+    container_name: watersystem-ml
+    volumes:
+      - .:/app
+    environment:
+        - INFLUXDB_URL=http://influxdb:8086
+        - INFLUXDB_TOKEN=my-super-token
+        - INFLUXDB_ORG=water-system
+        - INFLUXDB_BUCKET=bonsai-data
+        - MODEL_DIR="python/models"
+        - SERVER_HOST=${SERVER_HOST:-:8080}
+    depends_on:
+      - influxdb
+      - lgtm
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=${DOCKER_INFLUXDB_INIT_MODE:-setup}
+      - DOCKER_INFLUXDB_INIT_USERNAME=${DOCKER_INFLUXDB_INIT_USERNAME:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${DOCKER_INFLUXDB_INIT_PASSWORD:-change-me-please}
+      - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG:-water-system}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-bonsai-data}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-my-super-token}
+    volumes:
+      - influxdb2_data:/var/lib/influxdb2
+      - influxdb2_config:/etc/influxdb2
+    restart: unless-stopped
+
+  lgtm:
+      image: grafana/otel-lgtm:latest
+      ports:
+        - "3002:3000"
+        - "4317:4317"
+        - "4318:4318"
+
+volumes:
+  influxdb2_data:
+  influxdb2_config:
