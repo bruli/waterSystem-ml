@@ -18,7 +18,7 @@ spec:
         app: watersystem-ml
     spec:
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.6.1
+      - image: ghcr.io/bruli/watersystem-ml:0.1.1
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
