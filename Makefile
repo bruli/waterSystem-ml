@@ -21,7 +21,7 @@ DOCKERFILE ?= Dockerfile
 
 IMAGE_REG  ?= ghcr.io/bruli
 IMAGE_NAME := $(IMAGE_REG)/$(APP)
-VERSION    ?= 0.1.1
+VERSION    ?= 0.1.3
 CURRENT_IMAGE := $(IMAGE_NAME):$(VERSION)
 
 GOLANGCI_LINT_VERSION ?= v2.11.4
@@ -94,10 +94,10 @@ docker-push-image: docker-login
 	docker buildx build \
       --builder rpi-container-builder \
       --platform linux/arm64 \
-      -t ghcr.io/bruli/watersystem-ml:0.1.0 \
-      -f Dockerfile \
-      --cache-to=type=registry,ref=ghcr.io/bruli/watersystem-ml:0.1.0-buildcache,mode=max \
-      --cache-from=type=registry,ref=ghcr.io/bruli/watersystem-ml:0.1.0-buildcache \
+      -t $(CURRENT_IMAGE) \
+      -f $(DOCKERFILE) \
+      --cache-to=type=registry,ref=$(IMAGE_NAME)-buildcache,mode=max \
+      --cache-from=type=registry,ref=$(IMAGE_NAME)-buildcache \
       --push .
 	 echo "✅ Image $(CURRENT_IMAGE) pushed successfully."
 
