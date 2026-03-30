@@ -8,13 +8,12 @@ import (
 )
 
 const (
-	pythonEnv   = "/opt/venv/bin/python"
 	trainFile   = "python/train.py"
 	predictFile = "python/predict.py"
 )
 
-func RunTraining(ctx context.Context, log *slog.Logger) error {
-	output, err := runCommand(ctx, 30*time.Minute, pythonEnv, trainFile)
+func RunTraining(ctx context.Context, log *slog.Logger, pythonPath string) error {
+	output, err := runCommand(ctx, 30*time.Minute, pythonPath, trainFile)
 	if err != nil {
 		return fmt.Errorf("error running training: %s", output)
 	}

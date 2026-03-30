@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.1.5
+      - image: ghcr.io/bruli/watersystem-ml:0.1.6
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
@@ -57,6 +57,8 @@ spec:
                 secretKeyRef:
                   name: watersystem-ml-secret
                   key: INFLUXDB_BUCKET
+            - name: PYTHON_PATH
+              value: python
         readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 3

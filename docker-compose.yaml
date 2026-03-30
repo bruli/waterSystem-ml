@@ -13,6 +13,7 @@ services:
         - INFLUXDB_BUCKET=bonsai-data
         - MODEL_DIR=/tmp/models
         - SERVER_HOST=${SERVER_HOST:-:8080}
+        - PYTHON_PATH=/opt/venv/bin/python
     depends_on:
       - influxdb
       - lgtm

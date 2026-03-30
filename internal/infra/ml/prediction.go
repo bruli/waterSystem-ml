@@ -20,8 +20,8 @@ type Prediction struct {
 	DecisionReason                   string  `json:"decision_reason"`
 }
 
-func RunPrediction(ctx context.Context) ([]Prediction, error) {
-	output, err := runCommand(ctx, 30*time.Minute, pythonEnv, predictFile, "--json")
+func RunPrediction(ctx context.Context, pythonPath string) ([]Prediction, error) {
+	output, err := runCommand(ctx, 30*time.Minute, pythonPath, predictFile, "--json")
 	if err != nil {
 		return nil, fmt.Errorf("error running prediction: %s", err)
 	}

@@ -51,9 +51,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	go initialTraining(ctx, conf, log)
-	go trainingCron(ctx, log, cron)
-	go predictionCron(ctx, log, cron)
+	go initialTraining(ctx, conf, log, conf.PythonPath)
+	go trainingCron(ctx, log, cron, conf.PythonPath)
+	go predictionCron(ctx, log, cron, conf.PythonPath)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -74,7 +74,7 @@ func main() {
 	runHTTPServer(ctx, srv, log, serverListener)
 }
 
-func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger) {
+func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, pythonPath string) {
 	exists, empty, err := checkDir(conf.ModelDir)
 	if err != nil {
 		log.ErrorContext(ctx, "Error checking model dir", "err", err)
@@ -87,13 +87,13 @@ func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger)
 	}
 
 	log.InfoContext(ctx, "Model dir is empty or does not exist, run initial training")
-	executeTraining(ctx, log)
+	executeTraining(ctx, log, pythonPath)
 }
 
-func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
+func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, pythonPath string) {
 	defer c.Stop()
 	_, err := c.AddFunc("* 3 * * *", func() {
-		executeTraining(ctx, log)
+		executeTraining(ctx, log, pythonPath)
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Error adding cron job", "err", err)
@@ -105,8 +105,8 @@ func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
 	log.InfoContext(ctx, "Training cron stopped")
 }
 
-func executeTraining(ctx context.Context, log *slog.Logger) {
-	if err := ml.RunTraining(ctx, log); err != nil {
+func executeTraining(ctx context.Context, log *slog.Logger, pytonPath string) {
+	if err := ml.RunTraining(ctx, log, pytonPath); err != nil {
 		log.ErrorContext(ctx, "Error running training", slog.String("error", err.Error()))
 	}
 }
@@ -130,10 +130,10 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 	return true, true, nil
 }
 
-func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
+func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, pytonPath string) {
 	defer c.Stop()
 	_, err := c.AddFunc("00 * * * *", func() {
-		predictions, err := ml.RunPrediction(ctx)
+		predictions, err := ml.RunPrediction(ctx, pytonPath)
 		if err != nil {
 			log.ErrorContext(ctx, "Error running prediction", slog.String("error", err.Error()))
 		}

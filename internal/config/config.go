@@ -5,6 +5,7 @@ import "github.com/caarlos0/env/v11"
 type Config struct {
 	ServerHost string `env:"SERVER_HOST,required"`
 	ModelDir   string `env:"MODEL_DIR,required"`
+	PythonPath string `env:"PYTHON_PATH,required"`
 }
 
 func New() (*Config, error) {
