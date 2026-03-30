@@ -1,23 +1,49 @@
-FROM golang:1.26.1
+
+FROM golang:1.26.1 AS builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-venv \
-    python3-pip \
-    make \
-    git \
- && ln -s /usr/bin/python3 /usr/bin/python || true \
- && rm -rf /var/lib/apt/lists/*
+ENV GOPROXY=https://proxy.golang.org,direct
 
-COPY python/requirements.txt /tmp/requirements.txt
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-RUN python3 -m venv /opt/venv
-RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+COPY . .
 
-ENV PATH="/opt/venv/bin:${PATH}"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/watersystem-ml ./cmd/scheduler
 
-RUN go install -v github.com/cespare/reflex@latest
 
-ENTRYPOINT ["reflex", "-c", "./reflex.conf"]
+# =========================================================
+# Runtime
+# =========================================================
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/venv/bin:$PATH"
+
+# Paquets mínims útils
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Entorn virtual de Python
+RUN python -m venv /app/venv
+
+# Instal·lar dependències Python
+COPY python/requirements.txt /app/python/requirements.txt
+RUN pip install --no-cache-dir -r /app/python/requirements.txt
+
+# Copiar scripts i codi Python
+COPY python /app/python
+
+# Copiar binari de Go des de la fase builder
+COPY --from=builder /app/bin/watersystem-ml /app/watersystem-ml
+
+# Donar permisos d'execució
+RUN chmod +x /app/watersystem-ml
+
+CMD ["/app/watersystem-ml"]

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -51,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go executeTraining(ctx, log)
+	go initialTraining(ctx, conf, log)
 	go trainingCron(ctx, log, cron)
 	go predictionCron(ctx, log, cron)
 
@@ -74,6 +76,20 @@ func main() {
 	runHTTPServer(ctx, srv, log, serverListener)
 }
 
+func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger) {
+	exists, empty, err := checkDir(conf.ModelDir)
+	if err != nil {
+		log.ErrorContext(ctx, "Error checking model dir", "err", err)
+		return
+	}
+	if exists || !empty {
+		log.InfoContext(ctx, "Model dir exists and is not empty, ignoring initial training")
+		return
+	}
+	log.InfoContext(ctx, "Model dir is empty, run initial training")
+	executeTraining(ctx, log)
+}
+
 func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
 	defer c.Stop()
 	_, err := c.AddFunc("* 3 * * *", func() {
@@ -93,6 +109,36 @@ func executeTraining(ctx context.Context, log *slog.Logger) {
 	if err := ml.RunTraining(ctx, log); err != nil {
 		log.ErrorContext(ctx, "Error running training", slog.String("error", err.Error()))
 	}
+}
+
+func checkDir(path string) (exists bool, empty bool, err error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, true, nil
+		}
+		return false, false, err
+	}
+
+	if !info.IsDir() {
+		return true, false, fmt.Errorf("path is not a directory")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return true, false, err
+	}
+	defer func() { _ = f.Close() }()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, true, nil
+	}
+	if err != nil {
+		return true, false, err
+	}
+
+	return true, false, nil
 }
 
 func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {

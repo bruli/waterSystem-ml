@@ -12,7 +12,8 @@ PIP := $(VENV)/bin/pip
 PY := $(VENV)/bin/python
 
 .PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs\
- 	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check
+ 	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check\
+ 	docker-login docker-push-image
 
 .DEFAULT_GOAL := help
 
@@ -83,6 +84,20 @@ docker-logs:
 	@set -euo pipefail; \
 	echo "👀 Showing logs for container $(APP) (CTRL+C to exit)..."; \
 	docker logs -f $(APP)
+
+docker-login:
+	echo "🔐 Logging into Docker registry...";
+	echo "$$CR_PAT" | docker login ghcr.io -u bruli --password-stdin
+
+docker-push-image: docker-login
+	echo "🐳 Building and pushing Docker image $(CURRENT_IMAGE) ...";
+	docker buildx build \
+		--platform linux/arm64 \
+		-t $(CURRENT_IMAGE) \
+		-f $(DOCKERFILE) \
+		--push \
+		.
+	 echo "✅ Image $(CURRENT_IMAGE) pushed successfully."
 
 # ────────────────────────────────────────────────────────────────
 # 🧹 Code quality: format, lint, tests

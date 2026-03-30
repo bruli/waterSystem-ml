@@ -2,6 +2,7 @@ services:
   watersystem-ml:
     build:
       context: .
+      dockerfile: Dockerfile-dev
     container_name: watersystem-ml
     volumes:
       - .:/app

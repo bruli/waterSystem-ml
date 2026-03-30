@@ -1,0 +1,23 @@
+FROM golang:1.26.1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-venv \
+    python3-pip \
+    make \
+    git \
+ && ln -s /usr/bin/python3 /usr/bin/python || true \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY python/requirements.txt /tmp/requirements.txt
+
+RUN python3 -m venv /opt/venv
+RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+
+ENV PATH="/opt/venv/bin:${PATH}"
+
+RUN go install -v github.com/cespare/reflex@latest
+
+ENTRYPOINT ["reflex", "-c", "./reflex.conf"]
