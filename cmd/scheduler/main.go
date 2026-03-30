@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -112,7 +110,7 @@ func executeTraining(ctx context.Context, log *slog.Logger) {
 }
 
 func checkDir(path string) (exists bool, empty bool, err error) {
-	info, err := os.Stat(path)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, true, nil
@@ -120,25 +118,14 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 		return false, false, err
 	}
 
-	if !info.IsDir() {
-		return true, false, fmt.Errorf("path is not a directory")
+	for _, e := range entries {
+		if e.Name() == "lost+found" {
+			continue
+		}
+		return true, false, nil
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return true, false, err
-	}
-	defer func() { _ = f.Close() }()
-
-	_, err = f.Readdirnames(1)
-	if err == io.EOF {
-		return true, true, nil
-	}
-	if err != nil {
-		return true, false, err
-	}
-
-	return true, false, nil
+	return true, true, nil
 }
 
 func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
