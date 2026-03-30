@@ -10,7 +10,7 @@ services:
         - INFLUXDB_TOKEN=my-super-token
         - INFLUXDB_ORG=water-system
         - INFLUXDB_BUCKET=bonsai-data
-        - MODEL_DIR="python/models"
+        - MODEL_DIR=/tmp/models
         - SERVER_HOST=${SERVER_HOST:-:8080}
     depends_on:
       - influxdb

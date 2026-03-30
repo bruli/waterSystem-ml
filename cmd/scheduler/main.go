@@ -10,7 +10,10 @@ import (
 	"time"
 	"watersystem-ml/internal/config"
 	httpinfra "watersystem-ml/internal/infra/http"
+	"watersystem-ml/internal/infra/ml"
 	"watersystem-ml/internal/infra/tracing"
+
+	"github.com/robfig/cron/v3"
 )
 
 const serviceName = "watersystem-ml"
@@ -41,6 +44,16 @@ func main() {
 
 	//tracer := otel.Tracer(serviceName)
 
+	cron, err := buildCron()
+	if err != nil {
+		log.ErrorContext(ctx, "Error creating cron", "err", err)
+		os.Exit(1)
+	}
+
+	go executeTraining(ctx, log)
+	go trainingCron(ctx, log, cron)
+	go predictionCron(ctx, log, cron)
+
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
 	if err != nil {
@@ -58,6 +71,52 @@ func main() {
 	}()
 
 	runHTTPServer(ctx, srv, log, serverListener)
+}
+
+func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
+	defer c.Stop()
+	_, err := c.AddFunc("* 3 * * *", func() {
+		executeTraining(ctx, log)
+	})
+	if err != nil {
+		log.ErrorContext(ctx, "Error adding cron job", "err", err)
+		os.Exit(1)
+	}
+	log.InfoContext(ctx, "Training cron started")
+	c.Start()
+	<-ctx.Done()
+	log.InfoContext(ctx, "Training cron stopped")
+}
+
+func executeTraining(ctx context.Context, log *slog.Logger) {
+	if err := ml.RunTraining(ctx, log); err != nil {
+		log.ErrorContext(ctx, "Error running training", slog.String("error", err.Error()))
+	}
+}
+func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
+	defer c.Stop()
+	_, err := c.AddFunc("00 * * * *", func() {
+		predictions, err := ml.RunPrediction(ctx)
+		if err != nil {
+			log.ErrorContext(ctx, "Error running prediction", slog.String("error", err.Error()))
+		}
+		for _, pr := range predictions {
+			log.InfoContext(ctx, "prediction found",
+				slog.String("zone", pr.Zone),
+				slog.Bool("should_water", pr.ShouldWater),
+				slog.String("decision_reason", pr.DecisionReason),
+				slog.Float64("predicted_seconds", pr.PredictedSeconds),
+			)
+		}
+	})
+	if err != nil {
+		log.ErrorContext(ctx, "Error adding cron job", "err", err)
+		os.Exit(1)
+	}
+	log.InfoContext(ctx, "Prediction cron started")
+	c.Start()
+	<-ctx.Done()
+	log.InfoContext(ctx, "Prediction cron stopped")
 }
 
 func buildLog() *slog.Logger {
@@ -89,4 +148,13 @@ func shutdown(ctx context.Context, srv *http.Server, log *slog.Logger) {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("error shutting down server", "err", err)
 	}
+}
+
+func buildCron() (*cron.Cron, error) {
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		return nil, err
+	}
+	c := cron.New(cron.WithLocation(loc))
+	return c, nil
 }
