@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"os"
 	"time"
-	"watersystem-ml/internal/config"
-	httpinfra "watersystem-ml/internal/infra/http"
-	"watersystem-ml/internal/infra/ml"
-	"watersystem-ml/internal/infra/tracing"
+
+	"github.com/bruli/watersystem-ml/internal/config"
+	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
+	"github.com/bruli/watersystem-ml/internal/infra/ml"
+	"github.com/bruli/watersystem-ml/internal/infra/tracing"
 
 	"github.com/robfig/cron/v3"
 )
@@ -42,7 +43,7 @@ func main() {
 		}
 	}()
 
-	//tracer := otel.Tracer(serviceName)
+	// tracer := otel.Tracer(serviceName)
 
 	cron, err := buildCron()
 	if err != nil {
@@ -93,6 +94,7 @@ func executeTraining(ctx context.Context, log *slog.Logger) {
 		log.ErrorContext(ctx, "Error running training", slog.String("error", err.Error()))
 	}
 }
+
 func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron) {
 	defer c.Stop()
 	_, err := c.AddFunc("00 * * * *", func() {

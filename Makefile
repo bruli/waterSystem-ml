@@ -11,9 +11,19 @@ VENV := python/.venv
 PIP := $(VENV)/bin/pip
 PY := $(VENV)/bin/python
 
-.PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs docker-ps docker-up docker-influxdb-seed
+.PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs\
+ 	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check
 
 .DEFAULT_GOAL := help
+
+DOCKERFILE ?= Dockerfile
+
+IMAGE_REG  ?= ghcr.io/bruli
+IMAGE_NAME := $(IMAGE_REG)/$(APP)
+VERSION    ?= 0.1.0
+CURRENT_IMAGE := $(IMAGE_NAME):$(VERSION)
+
+GOLANGCI_LINT_VERSION ?= v2.11.4
 
 # Crear entorn virtual
 venv:
@@ -73,6 +83,31 @@ docker-logs:
 	@set -euo pipefail; \
 	echo "👀 Showing logs for container $(APP) (CTRL+C to exit)..."; \
 	docker logs -f $(APP)
+
+# ────────────────────────────────────────────────────────────────
+# 🧹 Code quality: format, lint, tests
+# ────────────────────────────────────────────────────────────────
+fmt:
+	@set -euo pipefail; \
+	echo "👉 Formatting code with gofumpt..."; \
+	go tool gofumpt -w .
+
+security:
+	@set -euo pipefail; \
+	echo "👉 Check security"; \
+	go tool govulncheck ./...
+
+install-lint:
+	@set -euo pipefail; \
+    echo "🔧 Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
+    	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+lint: install-lint
+	@set -euo pipefail; \
+	echo "🚀 Executing golangci-lint..."; \
+    golangci-lint run ./...
+
+check: fmt security lint
 
 # ────────────────────────────────────────────────────────────────
 # ℹ️ Help
