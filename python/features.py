@@ -3,12 +3,17 @@ import pandas as pd
 FEATURE_COLUMNS = [
     "temperature",
     "weather_is_raining_last",
+    "forecast_temperature",
+    "forecast_relative_humidity",
     "forecast_precipitation_probability",
+    "forecast_cloud_cover",
+    "forecast_shortwave_radiation",
     "hour",
     "day_of_week",
     "month",
     "days_since_last_watering",
 ]
+
 
 def normalize_zone(zone: str) -> str:
     if not zone:
@@ -16,11 +21,11 @@ def normalize_zone(zone: str) -> str:
 
     zone = zone.strip()
 
-    # elimina el sufix
     if zone.endswith(" with fertilizer"):
         zone = zone.replace(" with fertilizer", "")
 
     return zone
+
 
 def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -44,7 +49,7 @@ def add_watering_history(df: pd.DataFrame) -> pd.DataFrame:
         df["last_watering_time"] = df["_time"].where(df["seconds"] > 0).ffill()
 
     df["days_since_last_watering"] = (
-        (df["_time"] - df["last_watering_time"]).dt.total_seconds() / 86400
+            (df["_time"] - df["last_watering_time"]).dt.total_seconds() / 86400
     )
 
     df["days_since_last_watering"] = df["days_since_last_watering"].clip(lower=0)
@@ -59,6 +64,25 @@ def build_training_dataset(df: pd.DataFrame):
 
     df = df.dropna(subset=["temperature"])
 
+    if "forecast_temperature" not in df.columns:
+        df["forecast_temperature"] = df["temperature"]
+
+    df["forecast_relative_humidity"] = pd.to_numeric(
+        df.get("forecast_relative_humidity", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["forecast_precipitation_probability"] = pd.to_numeric(
+        df.get("forecast_precipitation_probability", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["forecast_cloud_cover"] = pd.to_numeric(
+        df.get("forecast_cloud_cover", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["forecast_shortwave_radiation"] = pd.to_numeric(
+        df.get("forecast_shortwave_radiation", 0.0), errors="coerce"
+    ).fillna(0.0)
+
     if df.empty:
         return {
             "X_classifier": pd.DataFrame(),
@@ -68,7 +92,7 @@ def build_training_dataset(df: pd.DataFrame):
             "metadata": {
                 "feature_columns": FEATURE_COLUMNS,
                 "classification_threshold": 0.3,
-                "model_version": "v1",
+                "model_version": "v2",
             },
         }
 
@@ -82,7 +106,7 @@ def build_training_dataset(df: pd.DataFrame):
     metadata = {
         "feature_columns": FEATURE_COLUMNS,
         "classification_threshold": 0.3,
-        "model_version": "v1",
+        "model_version": "v2",
     }
 
     return {
@@ -98,9 +122,15 @@ def build_prediction_dataset(df: pd.DataFrame, metadata: dict):
     df = add_time_features(df)
     df = add_watering_history(df)
 
+    if "forecast_temperature" not in df.columns:
+        df["forecast_temperature"] = df["temperature"]
+
     for col in metadata["feature_columns"]:
         if col not in df.columns:
-            df[col] = 0
+            if col == "forecast_temperature":
+                df[col] = df["temperature"]
+            else:
+                df[col] = 0
 
     X = df[metadata["feature_columns"]].copy()
 

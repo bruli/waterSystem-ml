@@ -78,8 +78,8 @@ from(bucket: "{INFLUXDB_BUCKET}")
 
     return zones
 
+
 def load_logs_data(zone: Optional[str] = None, start: str = "-90d") -> pd.DataFrame:
-    # Si hi ha zona, filtre per prefix (inclou "with fertilizer")
     if zone:
         zone_filter = f'|> filter(fn: (r) => strings.hasPrefix(v: r.zone, prefix: "{zone}"))'
     else:
@@ -103,14 +103,9 @@ from(bucket: "{INFLUXDB_BUCKET}")
         return pd.DataFrame(columns=["_time", "seconds", "zone"])
 
     df = df[["_time", "_value", "zone"]].copy()
-
-    # conversions
     df["_time"] = pd.to_datetime(df["_time"], utc=True)
     df["seconds"] = pd.to_numeric(df["_value"], errors="coerce")
-
-    # 🔥 NORMALITZACIÓ DE ZONA (clau)
     df["zone"] = df["zone"].astype(str).apply(normalize_zone)
-
     df = df.drop(columns=["_value"])
 
     return df
@@ -159,9 +154,133 @@ from(bucket: "{INFLUXDB_BUCKET}")
     return df[["_time", "temperature", "weather_is_raining_last"]].sort_values("_time")
 
 
+def load_forecast_data(start: str = "-90d") -> pd.DataFrame:
+    query = f'''
+from(bucket: "{INFLUXDB_BUCKET}")
+  |> range(start: {start})
+  |> filter(fn: (r) => r._measurement == "forecast_v2")
+  |> filter(fn: (r) =>
+      r._field == "temperature" or
+      r._field == "relative_humidity" or
+      r._field == "precipitation_probability" or
+      r._field == "cloud_cover" or
+      r._field == "shortwave_radiation" or
+      r._field == "forecast_generated_at"
+  )
+  |> keep(columns: ["_time", "_field", "_value", "location"])
+  |> pivot(rowKey: ["_time", "location"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"])
+'''
+
+    df = _query_to_df(query)
+
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "_time",
+                "location",
+                "forecast_temperature",
+                "forecast_relative_humidity",
+                "forecast_precipitation_probability",
+                "forecast_cloud_cover",
+                "forecast_shortwave_radiation",
+                "forecast_generated_at",
+            ]
+        )
+
+    df = df.copy()
+    df["_time"] = pd.to_datetime(df["_time"], utc=True)
+
+    numeric_defaults = {
+        "temperature": None,
+        "relative_humidity": 0.0,
+        "precipitation_probability": 0.0,
+        "cloud_cover": 0.0,
+        "shortwave_radiation": 0.0,
+    }
+
+    for col, default in numeric_defaults.items():
+        if col not in df.columns:
+            df[col] = default
+
+    if "forecast_generated_at" not in df.columns:
+        df["forecast_generated_at"] = None
+
+    df["forecast_temperature"] = pd.to_numeric(df["temperature"], errors="coerce")
+    df["forecast_relative_humidity"] = pd.to_numeric(df["relative_humidity"], errors="coerce").fillna(0.0)
+    df["forecast_precipitation_probability"] = pd.to_numeric(
+        df["precipitation_probability"], errors="coerce"
+    ).fillna(0.0)
+    df["forecast_cloud_cover"] = pd.to_numeric(df["cloud_cover"], errors="coerce").fillna(0.0)
+    df["forecast_shortwave_radiation"] = pd.to_numeric(
+        df["shortwave_radiation"], errors="coerce"
+    ).fillna(0.0)
+
+    df["forecast_generated_at"] = pd.to_numeric(df["forecast_generated_at"], errors="coerce")
+    df["forecast_generated_at"] = pd.to_datetime(
+        df["forecast_generated_at"], unit="s", utc=True, errors="coerce"
+    )
+
+    return df[
+        [
+            "_time",
+            "location",
+            "forecast_temperature",
+            "forecast_relative_humidity",
+            "forecast_precipitation_probability",
+            "forecast_cloud_cover",
+            "forecast_shortwave_radiation",
+            "forecast_generated_at",
+        ]
+    ].sort_values(["_time", "forecast_generated_at"])
+
+
+def _latest_forecast_row_for_time(
+        df_forecast: pd.DataFrame,
+        target_time: pd.Timestamp,
+) -> dict:
+    if df_forecast.empty:
+        return {
+            "forecast_temperature": None,
+            "forecast_relative_humidity": 0.0,
+            "forecast_precipitation_probability": 0.0,
+            "forecast_cloud_cover": 0.0,
+            "forecast_shortwave_radiation": 0.0,
+        }
+
+    valid_forecasts = df_forecast[
+        (df_forecast["_time"] <= target_time) &
+        (df_forecast["forecast_generated_at"] <= target_time)
+        ].sort_values(["forecast_generated_at", "_time"])
+
+    if valid_forecasts.empty:
+        return {
+            "forecast_temperature": None,
+            "forecast_relative_humidity": 0.0,
+            "forecast_precipitation_probability": 0.0,
+            "forecast_cloud_cover": 0.0,
+            "forecast_shortwave_radiation": 0.0,
+        }
+
+    row = valid_forecasts.iloc[-1]
+
+    return {
+        "forecast_temperature": (
+            float(row["forecast_temperature"])
+            if pd.notna(row["forecast_temperature"])
+            else None
+        ),
+        "forecast_relative_humidity": float(row["forecast_relative_humidity"]),
+        "forecast_precipitation_probability": float(row["forecast_precipitation_probability"]),
+        "forecast_cloud_cover": float(row["forecast_cloud_cover"]),
+        "forecast_shortwave_radiation": float(row["forecast_shortwave_radiation"]),
+    }
+
+
 def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.DataFrame:
     df_logs = load_logs_data(zone=zone, start=start)
     df_weather = load_weather_data(start=start)
+    df_forecast = load_forecast_data(start=start)
 
     if df_logs.empty:
         return pd.DataFrame()
@@ -179,7 +298,24 @@ def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.Da
         direction="backward",
     )
 
-    df["forecast_precipitation_probability"] = 0.0
+    if df_forecast.empty:
+        df["forecast_temperature"] = None
+        df["forecast_relative_humidity"] = 0.0
+        df["forecast_precipitation_probability"] = 0.0
+        df["forecast_cloud_cover"] = 0.0
+        df["forecast_shortwave_radiation"] = 0.0
+        return df
+
+    df_forecast = df_forecast.sort_values(["forecast_generated_at", "_time"]).copy()
+
+    forecast_rows = []
+    for _, row in df.iterrows():
+        forecast_rows.append(_latest_forecast_row_for_time(df_forecast, row["_time"]))
+
+    df_forecast_selected = pd.DataFrame(forecast_rows, index=df.index)
+
+    for col in df_forecast_selected.columns:
+        df[col] = df_forecast_selected[col]
 
     return df
 
@@ -187,12 +323,12 @@ def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.Da
 def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> pd.DataFrame:
     df_weather = load_weather_data(start=lookback)
     df_logs = load_logs_data(zone=zone, start=lookback)
+    df_forecast = load_forecast_data(start=lookback)
 
     if df_weather.empty:
         raise ValueError("No hi ha dades de weather per predir")
 
     latest_weather = df_weather.sort_values("_time").tail(1).copy()
-
     prediction_time = latest_weather.iloc[0]["_time"]
 
     df_logs_before_prediction = df_logs[df_logs["_time"] <= prediction_time].sort_values("_time")
@@ -205,9 +341,41 @@ def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> 
         last_watering_time = last_log["_time"]
         last_seconds = float(last_log["seconds"])
 
+    forecast_data = {
+        "forecast_temperature": None,
+        "forecast_relative_humidity": 0.0,
+        "forecast_precipitation_probability": 0.0,
+        "forecast_cloud_cover": 0.0,
+        "forecast_shortwave_radiation": 0.0,
+    }
+
+    if not df_forecast.empty:
+        df_forecast_before_prediction = df_forecast[
+            (df_forecast["_time"] >= prediction_time.floor("h")) &
+            (df_forecast["forecast_generated_at"] <= prediction_time)
+            ].sort_values(["forecast_generated_at", "_time"])
+
+        if not df_forecast_before_prediction.empty:
+            latest_forecast = df_forecast_before_prediction.iloc[-1]
+            forecast_data = {
+                "forecast_temperature": (
+                    float(latest_forecast["forecast_temperature"])
+                    if pd.notna(latest_forecast["forecast_temperature"])
+                    else None
+                ),
+                "forecast_relative_humidity": float(latest_forecast["forecast_relative_humidity"]),
+                "forecast_precipitation_probability": float(
+                    latest_forecast["forecast_precipitation_probability"]
+                ),
+                "forecast_cloud_cover": float(latest_forecast["forecast_cloud_cover"]),
+                "forecast_shortwave_radiation": float(latest_forecast["forecast_shortwave_radiation"]),
+            }
+
     latest_weather["zone"] = zone if zone else "unknown"
     latest_weather["seconds"] = last_seconds
     latest_weather["last_watering_time"] = last_watering_time
-    latest_weather["forecast_precipitation_probability"] = 0.0
+
+    for key, value in forecast_data.items():
+        latest_weather[key] = value
 
     return latest_weather.reset_index(drop=True)
