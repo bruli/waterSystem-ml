@@ -21,7 +21,7 @@ DOCKERFILE ?= Dockerfile
 
 IMAGE_REG  ?= ghcr.io/bruli
 IMAGE_NAME := $(IMAGE_REG)/$(APP)
-VERSION    ?= 0.1.7
+VERSION    ?= 0.2.0
 CURRENT_IMAGE := $(IMAGE_NAME):$(VERSION)
 
 GOLANGCI_LINT_VERSION ?= v2.11.4
@@ -132,7 +132,7 @@ edit-secrets:
 
 apply-secrets:
 	@set -euo pipefail; \
-	echo "🚀 Applying secreats in k3s..."; \
+	echo "🚀 Applying secrets in k3s..."; \
 	sops -d manifests/secret.sops.yaml | kubectl apply -f -
 
 # ────────────────────────────────────────────────────────────────
