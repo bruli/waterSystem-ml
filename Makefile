@@ -13,7 +13,7 @@ PY := $(VENV)/bin/python
 
 .PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs\
  	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check\
- 	docker-login docker-push-image
+ 	docker-login docker-push-image edit-secrets apply-secrets
 
 .DEFAULT_GOAL := help
 
@@ -125,6 +125,15 @@ lint: install-lint
     golangci-lint run ./...
 
 check: fmt security lint
+
+edit-secrets:
+	@set -euo pipefail; \
+  	sops manifests/secret.sops.yaml
+
+apply-secrets:
+	@set -euo pipefail; \
+	echo "🚀 Applying secreats in k3s..."; \
+	sops -d manifests/secret.sops.yaml | kubectl apply -f -
 
 # ────────────────────────────────────────────────────────────────
 # ℹ️ Help

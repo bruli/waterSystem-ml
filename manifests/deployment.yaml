@@ -59,6 +59,16 @@ spec:
                   key: INFLUXDB_BUCKET
             - name: PYTHON_PATH
               value: python
+            - name: TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: watersystem-ml-secret
+                  key: TELEGRAM_TOKEN
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: watersystem-ml-secret
+                  key: TELEGRAM_CHAT_ID
         readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 3

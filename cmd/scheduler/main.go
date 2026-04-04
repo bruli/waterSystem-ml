@@ -9,8 +9,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/bruli/watersystem-ml/internal/app"
 	"github.com/bruli/watersystem-ml/internal/config"
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
+	telegram "github.com/bruli/watersystem-ml/internal/infra/Telegram"
 	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
@@ -50,8 +52,15 @@ func main() {
 	duration := 30 * time.Minute
 	trainExecutor := python.NewTrainingExecutor(duration, conf.PythonPath, tracer, log)
 	predictionRepo := python.NewPredictionRepository(tracer, conf.PythonPath, duration)
+	telegramPublisher, err := telegram.NewMessagePublisher(conf.TelegramToken, conf.TelegramChatID)
+	if err != nil {
+		log.ErrorContext(ctx, "Error creating telegram publisher", "err", err)
+		os.Exit(1)
+	}
+
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	predictionSvc := ml.NewGetPrediction(predictionRepo, tracer)
+	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer)
 
 	cron, err := buildCron()
 	if err != nil {
@@ -61,7 +70,7 @@ func main() {
 
 	go initialTraining(ctx, conf, log, trainSvc)
 	go trainingCron(ctx, log, cron, trainSvc)
-	go predictionCron(ctx, log, cron, predictionSvc)
+	go predictionCron(ctx, log, cron, appPredictionSvc)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -138,7 +147,7 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 	return true, true, nil
 }
 
-func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.GetPrediction) {
+func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *app.GetPrediction) {
 	defer c.Stop()
 	_, err := c.AddFunc("00 * * * *", func() {
 		predictions, err := svc.Get(ctx)

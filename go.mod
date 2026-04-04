@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/caarlos0/env/v11 v11.4.0
+	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/robfig/cron/v3 v3.0.1
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.42.0
@@ -19,6 +20,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
+	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.42.0 // indirect
 	go.opentelemetry.io/otel/metric v1.42.0 // indirect
