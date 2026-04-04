@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/bruli/watersystem-ml/internal/config"
+	"github.com/bruli/watersystem-ml/internal/domain/ml"
 	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
-	"github.com/bruli/watersystem-ml/internal/infra/ml"
+	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
+	"go.opentelemetry.io/otel"
 
 	"github.com/robfig/cron/v3"
 )
@@ -43,7 +45,13 @@ func main() {
 		}
 	}()
 
-	// tracer := otel.Tracer(serviceName)
+	tracer := otel.Tracer(serviceName)
+
+	duration := 30 * time.Minute
+	trainExecutor := python.NewTrainingExecutor(duration, conf.PythonPath, tracer, log)
+	predictionRepo := python.NewPredictionRepository(tracer, conf.PythonPath, duration)
+	trainSvc := ml.NewTrain(trainExecutor, tracer)
+	predictionSvc := ml.NewGetPrediction(predictionRepo, tracer)
 
 	cron, err := buildCron()
 	if err != nil {
@@ -51,9 +59,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	go initialTraining(ctx, conf, log, conf.PythonPath)
-	go trainingCron(ctx, log, cron, conf.PythonPath)
-	go predictionCron(ctx, log, cron, conf.PythonPath)
+	go initialTraining(ctx, conf, log, trainSvc)
+	go trainingCron(ctx, log, cron, trainSvc)
+	go predictionCron(ctx, log, cron, predictionSvc)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -74,7 +82,7 @@ func main() {
 	runHTTPServer(ctx, srv, log, serverListener)
 }
 
-func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, pythonPath string) {
+func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, svc *ml.Train) {
 	exists, empty, err := checkDir(conf.ModelDir)
 	if err != nil {
 		log.ErrorContext(ctx, "Error checking model dir", "err", err)
@@ -87,13 +95,13 @@ func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger,
 	}
 
 	log.InfoContext(ctx, "Model dir is empty or does not exist, run initial training")
-	executeTraining(ctx, log, pythonPath)
+	executeTraining(ctx, log, svc)
 }
 
-func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, pythonPath string) {
+func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.Train) {
 	defer c.Stop()
 	_, err := c.AddFunc("* 3 * * *", func() {
-		executeTraining(ctx, log, pythonPath)
+		executeTraining(ctx, log, svc)
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Error adding cron job", "err", err)
@@ -105,8 +113,8 @@ func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, pythonPat
 	log.InfoContext(ctx, "Training cron stopped")
 }
 
-func executeTraining(ctx context.Context, log *slog.Logger, pytonPath string) {
-	if err := ml.RunTraining(ctx, log, pytonPath); err != nil {
+func executeTraining(ctx context.Context, log *slog.Logger, svc *ml.Train) {
+	if err := svc.Run(ctx); err != nil {
 		log.ErrorContext(ctx, "Error running training", slog.String("error", err.Error()))
 	}
 }
@@ -130,19 +138,19 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 	return true, true, nil
 }
 
-func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, pytonPath string) {
+func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.GetPrediction) {
 	defer c.Stop()
 	_, err := c.AddFunc("00 * * * *", func() {
-		predictions, err := ml.RunPrediction(ctx, pytonPath)
+		predictions, err := svc.Get(ctx)
 		if err != nil {
 			log.ErrorContext(ctx, "Error running prediction", slog.String("error", err.Error()))
 		}
 		for _, pr := range predictions {
 			log.InfoContext(ctx, "prediction found",
-				slog.String("zone", pr.Zone),
-				slog.Bool("should_water", pr.ShouldWater),
-				slog.String("decision_reason", pr.DecisionReason),
-				slog.Float64("predicted_seconds", pr.PredictedSeconds),
+				slog.String("zone", pr.Zone()),
+				slog.Bool("should_water", pr.ShouldWater()),
+				slog.String("decision_reason", pr.DecisionReason()),
+				slog.Float64("predicted_seconds", pr.PredictedSeconds()),
 			)
 		}
 	})
