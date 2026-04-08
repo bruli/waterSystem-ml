@@ -33,7 +33,7 @@ venv:
 # Instal·lar dependències
 install: venv
 	$(PIP) install --upgrade pip
-	$(PIP) install -r python/requirements.txt
+	$(PIP) install -r python/requirements-dev.txt
 
 # Executar train
 train:

@@ -1,3 +1,4 @@
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from data_loader import load_available_zones, load_training_data
@@ -34,11 +35,27 @@ def main():
             print(f"Sense dades útils per classifier a {zone}, la salto")
             continue
 
-        clf = RandomForestClassifier(
-            n_estimators=100,
-            random_state=42,
-        )
-        clf.fit(data["X_classifier"], data["y_classifier"])
+        unique_classes = sorted(data["y_classifier"].dropna().unique().tolist())
+
+        metadata = dict(data["metadata"])
+        metadata["classifier_classes"] = unique_classes
+        metadata["samples_classifier"] = int(len(data["X_classifier"]))
+        metadata["samples_regressor"] = int(len(data["X_regressor"]))
+
+        if len(unique_classes) < 2:
+            print(f"[WARN] Zona {zone}: només hi ha una classe a y_classifier: {unique_classes}")
+            print("[WARN] Es guardarà un DummyClassifier constant.")
+
+            constant_class = int(unique_classes[0])
+            clf = DummyClassifier(strategy="constant", constant=constant_class)
+            clf.fit(data["X_classifier"], data["y_classifier"])
+        else:
+            clf = RandomForestClassifier(
+                n_estimators=100,
+                random_state=42,
+                class_weight="balanced",
+            )
+            clf.fit(data["X_classifier"], data["y_classifier"])
 
         reg = None
         if not data["X_regressor"].empty and not data["y_regressor"].empty:
@@ -50,7 +67,7 @@ def main():
         else:
             print(f"Sense dades suficients per al regressor a {zone}")
 
-        save_models_for_zone(zone, clf, reg, data["metadata"])
+        save_models_for_zone(zone, clf, reg, metadata)
         print(f"Models guardats per a {zone}")
 
 
