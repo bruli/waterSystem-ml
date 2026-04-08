@@ -15,6 +15,13 @@ INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN")
 INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "home")
 INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "bonsai-data")
 
+SENSOR_MEASUREMENT_TO_ZONE = {
+    "sensor.bonsai_big_bonsai_big_soil_moisture": "Bonsai big",
+    "sensor.bonsai_big_bonsai_big_soil_temperature": "Bonsai big",
+    "sensor.bonsai_small_bonsai_small_soil_moisture": "Bonsai small",
+    "sensor.bonsai_small_bonsai_small_soil_temperature": "Bonsai small",
+}
+
 
 def _get_client() -> InfluxDBClient:
     if not INFLUXDB_URL or not INFLUXDB_TOKEN:
@@ -242,6 +249,72 @@ from(bucket: "{INFLUXDB_BUCKET}")
     ].sort_values(["_time", "forecast_generated_at"])
 
 
+def load_soil_moisture_data(zone: Optional[str] = None, start: str = "-90d") -> pd.DataFrame:
+    query = f'''
+from(bucket: "{INFLUXDB_BUCKET}")
+  |> range(start: {start})
+  |> filter(fn: (r) => r._field == "value")
+  |> filter(fn: (r) => r.domain == "sensor")
+  |> filter(fn: (r) =>
+      r._measurement == "sensor.bonsai_big_bonsai_big_soil_moisture" or
+      r._measurement == "sensor.bonsai_small_bonsai_small_soil_moisture"
+  )
+  |> keep(columns: ["_time", "_measurement", "_value"])
+  |> sort(columns: ["_time"])
+'''
+
+    df = _query_to_df(query)
+
+    if df.empty:
+        return pd.DataFrame(columns=["_time", "zone", "soil_moisture"])
+
+    df = df[["_time", "_measurement", "_value"]].copy()
+    df["_time"] = pd.to_datetime(df["_time"], utc=True)
+    df["zone"] = df["_measurement"].map(SENSOR_MEASUREMENT_TO_ZONE)
+    df["soil_moisture"] = pd.to_numeric(df["_value"], errors="coerce")
+    df = df.drop(columns=["_measurement", "_value"])
+    df = df.dropna(subset=["zone"])
+    df["zone"] = df["zone"].astype(str).apply(normalize_zone)
+
+    if zone:
+        df = df[df["zone"] == normalize_zone(zone)]
+
+    return df.sort_values(["zone", "_time"]).reset_index(drop=True)
+
+
+def load_soil_temperature_data(zone: Optional[str] = None, start: str = "-90d") -> pd.DataFrame:
+    query = f'''
+from(bucket: "{INFLUXDB_BUCKET}")
+  |> range(start: {start})
+  |> filter(fn: (r) => r._field == "value")
+  |> filter(fn: (r) => r.domain == "sensor")
+  |> filter(fn: (r) =>
+      r._measurement == "sensor.bonsai_big_bonsai_big_soil_temperature" or
+      r._measurement == "sensor.bonsai_small_bonsai_small_soil_temperature"
+  )
+  |> keep(columns: ["_time", "_measurement", "_value"])
+  |> sort(columns: ["_time"])
+'''
+
+    df = _query_to_df(query)
+
+    if df.empty:
+        return pd.DataFrame(columns=["_time", "zone", "soil_temperature"])
+
+    df = df[["_time", "_measurement", "_value"]].copy()
+    df["_time"] = pd.to_datetime(df["_time"], utc=True)
+    df["zone"] = df["_measurement"].map(SENSOR_MEASUREMENT_TO_ZONE)
+    df["soil_temperature"] = pd.to_numeric(df["_value"], errors="coerce")
+    df = df.drop(columns=["_measurement", "_value"])
+    df = df.dropna(subset=["zone"])
+    df["zone"] = df["zone"].astype(str).apply(normalize_zone)
+
+    if zone:
+        df = df[df["zone"] == normalize_zone(zone)]
+
+    return df.sort_values(["zone", "_time"]).reset_index(drop=True)
+
+
 def _empty_forecast_row() -> dict:
     return {
         "forecast_temperature": None,
@@ -284,10 +357,46 @@ def _latest_forecast_row_for_time(
     }
 
 
+def _merge_sensor_asof_by_zone(
+        df_base: pd.DataFrame,
+        df_sensor: pd.DataFrame,
+        value_columns: list[str],
+        tolerance: str = "24h",
+) -> pd.DataFrame:
+    if df_base.empty or df_sensor.empty:
+        return df_base
+
+    parts = []
+
+    for zone in df_base["zone"].dropna().unique():
+        base_zone = df_base[df_base["zone"] == zone].copy().sort_values("_time")
+        sensor_zone = df_sensor[df_sensor["zone"] == zone].copy().sort_values("_time")
+
+        if sensor_zone.empty:
+            parts.append(base_zone)
+            continue
+
+        merged = pd.merge_asof(
+            base_zone,
+            sensor_zone[["_time"] + value_columns].sort_values("_time"),
+            on="_time",
+            direction="backward",
+            tolerance=pd.Timedelta(tolerance),
+        )
+        parts.append(merged)
+
+    if not parts:
+        return df_base
+
+    return pd.concat(parts, ignore_index=True).sort_values(["zone", "_time"]).reset_index(drop=True)
+
+
 def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.DataFrame:
     df_logs = load_logs_data(zone=zone, start=start)
     df_weather = load_weather_data(start=start)
     df_forecast = load_forecast_data(start=start)
+    df_soil_moisture = load_soil_moisture_data(zone=zone, start=start)
+    df_soil_temperature = load_soil_temperature_data(zone=zone, start=start)
 
     if df_logs.empty:
         return pd.DataFrame()
@@ -312,18 +421,20 @@ def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.Da
         df["forecast_cloud_cover"] = 0.0
         df["forecast_shortwave_radiation"] = 0.0
         df["forecast_drying_factor"] = 0.0
-        return df
+    else:
+        df_forecast = df_forecast.sort_values(["forecast_generated_at", "_time"]).copy()
 
-    df_forecast = df_forecast.sort_values(["forecast_generated_at", "_time"]).copy()
+        forecast_rows = []
+        for _, row in df.iterrows():
+            forecast_rows.append(_latest_forecast_row_for_time(df_forecast, row["_time"]))
 
-    forecast_rows = []
-    for _, row in df.iterrows():
-        forecast_rows.append(_latest_forecast_row_for_time(df_forecast, row["_time"]))
+        df_forecast_selected = pd.DataFrame(forecast_rows, index=df.index)
 
-    df_forecast_selected = pd.DataFrame(forecast_rows, index=df.index)
+        for col in df_forecast_selected.columns:
+            df[col] = df_forecast_selected[col]
 
-    for col in df_forecast_selected.columns:
-        df[col] = df_forecast_selected[col]
+    df = _merge_sensor_asof_by_zone(df, df_soil_moisture, ["soil_moisture"])
+    df = _merge_sensor_asof_by_zone(df, df_soil_temperature, ["soil_temperature"])
 
     return df
 
@@ -332,6 +443,8 @@ def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> 
     df_weather = load_weather_data(start=lookback)
     df_logs = load_logs_data(zone=zone, start=lookback)
     df_forecast = load_forecast_data(start=lookback)
+    df_soil_moisture = load_soil_moisture_data(zone=zone, start=lookback)
+    df_soil_temperature = load_soil_temperature_data(zone=zone, start=lookback)
 
     if df_weather.empty:
         raise ValueError("No hi ha dades de weather per predir")
@@ -374,11 +487,31 @@ def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> 
                 "forecast_drying_factor": float(latest_forecast["forecast_drying_factor"]),
             }
 
-    latest_weather["zone"] = zone if zone else "unknown"
+    latest_weather["zone"] = normalize_zone(zone) if zone else "unknown"
     latest_weather["seconds"] = last_seconds
     latest_weather["last_watering_time"] = last_watering_time
 
     for key, value in forecast_data.items():
         latest_weather[key] = value
+
+    zone_normalized = normalize_zone(zone) if zone else None
+
+    if zone_normalized and not df_soil_moisture.empty:
+        moisture_zone = df_soil_moisture[df_soil_moisture["zone"] == zone_normalized].sort_values("_time")
+        latest_weather["soil_moisture"] = (
+            float(moisture_zone.iloc[-1]["soil_moisture"])
+            if not moisture_zone.empty else None
+        )
+    else:
+        latest_weather["soil_moisture"] = None
+
+    if zone_normalized and not df_soil_temperature.empty:
+        temp_zone = df_soil_temperature[df_soil_temperature["zone"] == zone_normalized].sort_values("_time")
+        latest_weather["soil_temperature"] = (
+            float(temp_zone.iloc[-1]["soil_temperature"])
+            if not temp_zone.empty else None
+        )
+    else:
+        latest_weather["soil_temperature"] = None
 
     return latest_weather.reset_index(drop=True)

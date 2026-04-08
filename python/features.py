@@ -9,6 +9,10 @@ FEATURE_COLUMNS = [
     "forecast_cloud_cover",
     "forecast_shortwave_radiation",
     "forecast_drying_factor",
+    "soil_moisture",
+    "soil_temperature",
+    "soil_moisture_diff",
+    "soil_temp_is_extreme",
     "hour",
     "day_of_week",
     "month",
@@ -59,9 +63,32 @@ def add_watering_history(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_sensor_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy().sort_values("_time")
+
+    df["soil_moisture"] = pd.to_numeric(
+        df.get("soil_moisture", 0.0), errors="coerce"
+    )
+    df["soil_temperature"] = pd.to_numeric(
+        df.get("soil_temperature", 0.0), errors="coerce"
+    )
+
+    df["soil_moisture"] = df["soil_moisture"].fillna(0.0)
+    df["soil_temperature"] = df["soil_temperature"].fillna(0.0)
+
+    df["soil_moisture_diff"] = df["soil_moisture"].diff().fillna(0.0)
+
+    df["soil_temp_is_extreme"] = (
+            (df["soil_temperature"] < 5.0) | (df["soil_temperature"] > 30.0)
+    ).astype(int)
+
+    return df
+
+
 def build_training_dataset(df: pd.DataFrame):
     df = add_time_features(df)
     df = add_watering_history(df)
+    df = add_sensor_features(df)
 
     df = df.dropna(subset=["temperature"])
 
@@ -88,6 +115,22 @@ def build_training_dataset(df: pd.DataFrame):
         df.get("forecast_drying_factor", 0.0), errors="coerce"
     ).fillna(0.0)
 
+    df["soil_moisture"] = pd.to_numeric(
+        df.get("soil_moisture", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["soil_temperature"] = pd.to_numeric(
+        df.get("soil_temperature", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["soil_moisture_diff"] = pd.to_numeric(
+        df.get("soil_moisture_diff", 0.0), errors="coerce"
+    ).fillna(0.0)
+
+    df["soil_temp_is_extreme"] = pd.to_numeric(
+        df.get("soil_temp_is_extreme", 0), errors="coerce"
+    ).fillna(0).astype(int)
+
     if df.empty:
         return {
             "X_classifier": pd.DataFrame(),
@@ -97,7 +140,7 @@ def build_training_dataset(df: pd.DataFrame):
             "metadata": {
                 "feature_columns": FEATURE_COLUMNS,
                 "classification_threshold": 0.3,
-                "model_version": "v3",
+                "model_version": "v4",
             },
         }
 
@@ -111,7 +154,7 @@ def build_training_dataset(df: pd.DataFrame):
     metadata = {
         "feature_columns": FEATURE_COLUMNS,
         "classification_threshold": 0.3,
-        "model_version": "v3",
+        "model_version": "v4",
     }
 
     return {
@@ -126,6 +169,7 @@ def build_training_dataset(df: pd.DataFrame):
 def build_prediction_dataset(df: pd.DataFrame, metadata: dict):
     df = add_time_features(df)
     df = add_watering_history(df)
+    df = add_sensor_features(df)
 
     if "forecast_temperature" not in df.columns:
         df["forecast_temperature"] = df["temperature"]
@@ -134,6 +178,8 @@ def build_prediction_dataset(df: pd.DataFrame, metadata: dict):
         if col not in df.columns:
             if col == "forecast_temperature":
                 df[col] = df["temperature"]
+            elif col == "soil_temp_is_extreme":
+                df[col] = 0
             else:
                 df[col] = 0.0
 
