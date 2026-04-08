@@ -63,7 +63,6 @@ def main():
 
         row = df.iloc[0]
 
-        # classifier només com a informació auxiliar
         watering_proba = classifier_probability(clf, X)
 
         allowed, reason = should_water_by_rules(row)
@@ -82,7 +81,12 @@ def main():
             "zone": row["zone"],
             "temperature": float(row["temperature"]) if row["temperature"] is not None else None,
             "weather_is_raining_last": int(row["weather_is_raining_last"]),
+            "forecast_temperature": float(row["forecast_temperature"]) if row["forecast_temperature"] is not None else None,
+            "forecast_relative_humidity": float(row["forecast_relative_humidity"]),
             "forecast_precipitation_probability": float(row["forecast_precipitation_probability"]),
+            "forecast_cloud_cover": float(row["forecast_cloud_cover"]),
+            "forecast_shortwave_radiation": float(row["forecast_shortwave_radiation"]),
+            "forecast_drying_factor": float(row["forecast_drying_factor"]),
             "days_since_last_watering": float(row["days_since_last_watering"]),
             "watering_proba": round(watering_proba, 4),
             "should_water": predicted_seconds > 0,

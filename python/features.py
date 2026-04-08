@@ -8,6 +8,7 @@ FEATURE_COLUMNS = [
     "forecast_precipitation_probability",
     "forecast_cloud_cover",
     "forecast_shortwave_radiation",
+    "forecast_drying_factor",
     "hour",
     "day_of_week",
     "month",
@@ -83,6 +84,10 @@ def build_training_dataset(df: pd.DataFrame):
         df.get("forecast_shortwave_radiation", 0.0), errors="coerce"
     ).fillna(0.0)
 
+    df["forecast_drying_factor"] = pd.to_numeric(
+        df.get("forecast_drying_factor", 0.0), errors="coerce"
+    ).fillna(0.0)
+
     if df.empty:
         return {
             "X_classifier": pd.DataFrame(),
@@ -92,7 +97,7 @@ def build_training_dataset(df: pd.DataFrame):
             "metadata": {
                 "feature_columns": FEATURE_COLUMNS,
                 "classification_threshold": 0.3,
-                "model_version": "v2",
+                "model_version": "v3",
             },
         }
 
@@ -106,7 +111,7 @@ def build_training_dataset(df: pd.DataFrame):
     metadata = {
         "feature_columns": FEATURE_COLUMNS,
         "classification_threshold": 0.3,
-        "model_version": "v2",
+        "model_version": "v3",
     }
 
     return {
@@ -130,7 +135,7 @@ def build_prediction_dataset(df: pd.DataFrame, metadata: dict):
             if col == "forecast_temperature":
                 df[col] = df["temperature"]
             else:
-                df[col] = 0
+                df[col] = 0.0
 
     X = df[metadata["feature_columns"]].copy()
 

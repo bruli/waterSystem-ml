@@ -13,7 +13,7 @@ PY := $(VENV)/bin/python
 
 .PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs\
  	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check\
- 	docker-login docker-push-image edit-secrets apply-secrets
+ 	docker-login docker-push-image edit-secrets apply-secrets docker-train docker-predict
 
 .DEFAULT_GOAL := help
 
@@ -79,6 +79,16 @@ docker-influxdb-seed:
 	@set -euo pipefail; \
 	echo "🔎 Creating data in influxdb ..."; \
 	$(DOCKER_COMPOSE) exec $(APP) sh /app/scripts/seed_influxdb.sh
+
+docker-train:
+	@set -euo pipefail; \
+	echo "🚀 Running train ..."; \
+	$(DOCKER_COMPOSE) exec $(APP) /opt/venv/bin/python /app/python/train.py
+
+docker-predict:
+	@set -euo pipefail; \
+	echo "🚀 Running predict ..."; \
+	$(DOCKER_COMPOSE) exec $(APP) /opt/venv/bin/python /app/python/predict.py
 
 docker-logs:
 	@set -euo pipefail; \

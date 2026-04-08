@@ -28,6 +28,7 @@ def main():
         print("X_classifier shape:", data["X_classifier"].shape)
         print("y_classifier counts:")
         print(data["y_classifier"].value_counts(dropna=False))
+        print("Feature columns:", data["metadata"]["feature_columns"])
 
         if data["X_classifier"].empty or data["y_classifier"].empty:
             print(f"Sense dades útils per classifier a {zone}, la salto")
