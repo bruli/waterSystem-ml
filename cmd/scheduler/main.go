@@ -70,7 +70,7 @@ func main() {
 
 	go initialTraining(ctx, conf, log, trainSvc)
 	go trainingCron(ctx, log, cron, trainSvc)
-	go predictionCron(ctx, log, cron, appPredictionSvc)
+	go runPrediction(ctx, log, appPredictionSvc)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -147,30 +147,32 @@ func checkDir(path string) (exists bool, empty bool, err error) {
 	return true, true, nil
 }
 
-func predictionCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *app.GetPrediction) {
-	defer c.Stop()
-	_, err := c.AddFunc("00 * * * *", func() {
-		predictions, err := svc.Get(ctx)
-		if err != nil {
-			log.ErrorContext(ctx, "Error running prediction", slog.String("error", err.Error()))
+func runPrediction(ctx context.Context, log *slog.Logger, svc *app.GetPrediction) {
+	tick := time.NewTicker(15 * time.Minute)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			runCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+			predictions, err := svc.Get(runCtx)
+			cancel()
+			if err != nil {
+				log.ErrorContext(ctx, "Error running prediction", slog.String("error", err.Error()))
+				continue
+			}
+			for _, pr := range predictions {
+				log.InfoContext(ctx, "prediction found",
+					slog.String("zone", pr.Zone()),
+					slog.Bool("should_water", pr.ShouldWater()),
+					slog.String("decision_reason", pr.DecisionReason()),
+					slog.Float64("predicted_seconds", pr.PredictedSeconds()),
+				)
+			}
 		}
-		for _, pr := range predictions {
-			log.InfoContext(ctx, "prediction found",
-				slog.String("zone", pr.Zone()),
-				slog.Bool("should_water", pr.ShouldWater()),
-				slog.String("decision_reason", pr.DecisionReason()),
-				slog.Float64("predicted_seconds", pr.PredictedSeconds()),
-			)
-		}
-	})
-	if err != nil {
-		log.ErrorContext(ctx, "Error adding cron job", "err", err)
-		os.Exit(1)
 	}
-	log.InfoContext(ctx, "Prediction cron started")
-	c.Start()
-	<-ctx.Done()
-	log.InfoContext(ctx, "Prediction cron stopped")
 }
 
 func buildLog() *slog.Logger {
