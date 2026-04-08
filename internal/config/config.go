@@ -8,6 +8,7 @@ type Config struct {
 	PythonPath     string `env:"PYTHON_PATH,required"`
 	TelegramToken  string `env:"TELEGRAM_TOKEN,required"`
 	TelegramChatID int    `env:"TELEGRAM_CHAT_ID,required"`
+	Env            string `env:"ENV" envDefault:"PROD"`
 }
 
 func New() (*Config, error) {
@@ -16,4 +17,8 @@ func New() (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func (c *Config) IsProd() bool {
+	return c.Env == "PROD"
 }

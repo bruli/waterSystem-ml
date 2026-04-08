@@ -30,7 +30,7 @@ jobs:
       - name: Set up Go 1.26.2
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.1'
+          go-version: '1.26.2'
           cache: false  # usem cache manual per controlar directoris
 
       - name: Cache Go modules

@@ -3,7 +3,7 @@ package telegram
 import (
 	"context"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type MessagePublisher struct {
@@ -22,8 +22,17 @@ func (e MessagePublisher) Publish(ctx context.Context, message string) error {
 	}
 }
 
-func NewMessagePublisher(token string, chatID int) (*MessagePublisher, error) {
-	bot, err := tgbotapi.NewBotAPI(token)
+func NewMessagePublisher(token string, chatID int, isProd bool) (*MessagePublisher, error) {
+	var (
+		bot *tgbotapi.BotAPI
+		err error
+	)
+	switch {
+	case isProd:
+		bot, err = tgbotapi.NewBotAPI(token)
+	default:
+		bot, err = tgbotapi.NewBotAPIWithAPIEndpoint(token, "http://mockserver:1080/bot%s/%s")
+	}
 	if err != nil {
 		return nil, err
 	}

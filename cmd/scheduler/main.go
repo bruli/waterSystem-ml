@@ -52,7 +52,7 @@ func main() {
 	duration := 30 * time.Minute
 	trainExecutor := python.NewTrainingExecutor(duration, conf.PythonPath, tracer, log)
 	predictionRepo := python.NewPredictionRepository(tracer, conf.PythonPath, duration)
-	telegramPublisher, err := telegram.NewMessagePublisher(conf.TelegramToken, conf.TelegramChatID)
+	telegramPublisher, err := telegram.NewMessagePublisher(conf.TelegramToken, conf.TelegramChatID, conf.IsProd())
 	if err != nil {
 		log.ErrorContext(ctx, "Error creating telegram publisher", "err", err)
 		os.Exit(1)

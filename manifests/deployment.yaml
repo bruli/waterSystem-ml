@@ -69,6 +69,8 @@ spec:
                 secretKeyRef:
                   name: watersystem-ml-secret
                   key: TELEGRAM_CHAT_ID
+            - name: ENV
+              value: PROD
         readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 3

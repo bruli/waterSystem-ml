@@ -1,4 +1,4 @@
-FROM golang:1.26.1
+FROM golang:1.26.2
 
 WORKDIR /app
 
@@ -11,13 +11,19 @@ RUN apt-get update && apt-get install -y \
  && ln -s /usr/bin/python3 /usr/bin/python || true \
  && rm -rf /var/lib/apt/lists/*
 
-COPY python/requirements.txt /tmp/requirements.txt
+# Cache de deps Go
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN python3 -m venv /opt/venv
-RUN /opt/venv/bin/pip install -r /tmp/requirements.txt
+# Python venv
+COPY python/requirements-dev.txt /tmp/requirements-dev.txt
+COPY python/requirements.txt /tmp/requirements.txt
+RUN python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install -r /tmp/requirements-dev.txt
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
-RUN go install -v github.com/cespare/reflex@latest
+# Instal·lar air
+RUN go install github.com/air-verse/air@latest
 
-ENTRYPOINT ["reflex", "-c", "./reflex.conf"]
+CMD ["air", "-c", ".air.toml"]
