@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
 cmd = "go build -o ./tmp/server ./cmd/scheduler"
-bin = "./tmp/server"
+entrypoint = "./tmp/server"
 full_bin = "./tmp/server"
 
 include_ext = ["go", "env"]

@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.3.0
+      - image: ghcr.io/bruli/watersystem-ml:0.4.0
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
@@ -45,30 +45,30 @@ spec:
             - name: INFLUXDB_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: watersystem-ml-secret
-                  key: INFLUXDB_TOKEN
+                  name: influxdb-secret
+                  key: token
             - name: INFLUXDB_ORG
               valueFrom:
                 secretKeyRef:
-                  name: watersystem-ml-secret
-                  key: INFLUXDB_ORG
+                  name: influxdb-secret
+                  key: org
             - name: INFLUXDB_BUCKET
               valueFrom:
                 secretKeyRef:
-                  name: watersystem-ml-secret
-                  key: INFLUXDB_BUCKET
+                  name: influxdb-secret
+                  key: bucket
             - name: PYTHON_PATH
               value: python
             - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: watersystem-ml-secret
-                  key: TELEGRAM_TOKEN
+                  name: telegram-secret
+                  key: token
             - name: TELEGRAM_CHAT_ID
               valueFrom:
                 secretKeyRef:
-                  name: watersystem-ml-secret
-                  key: TELEGRAM_CHAT_ID
+                  name: telegram-secret
+                  key: chat_id
             - name: ENV
               value: PROD
         readinessProbe:
