@@ -1,16 +1,19 @@
+import argparse
 import json
-import sys
+import math
+import os
 
 import numpy as np
 import pandas as pd
 
 from data_loader import load_available_zones, load_prediction_data
 from features import build_prediction_dataset
-from model_io import load_models_for_zone
+from model_io import load_models_for_zone, slugify_zone
 
-SOIL_MOISTURE_THRESHOLD = 40.0
-MIN_SECONDS = 3.0
-MAX_SECONDS = 45.0
+MIN_SECONDS = 13.0
+MAX_SECONDS = 60.0
+DEFAULT_THRESHOLD = 0.30
+MODEL_DIR = os.getenv("MODEL_DIR", "./models")
 
 
 def safe_predict_proba(clf, X_predict):
@@ -25,232 +28,213 @@ def safe_predict_proba(clf, X_predict):
     return proba[:, class_index]
 
 
-def row_has_valid_soil_data(row) -> bool:
-    soil_moisture = pd.to_numeric(pd.Series([row.get("soil_moisture")]), errors="coerce").iloc[0]
-    soil_temperature = pd.to_numeric(pd.Series([row.get("soil_temperature")]), errors="coerce").iloc[0]
+def clamp_seconds(value: float) -> float:
+    if value is None:
+        return MIN_SECONDS
 
-    if pd.isna(soil_moisture) or pd.isna(soil_temperature):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return MIN_SECONDS
+
+    if math.isnan(value):
+        return MIN_SECONDS
+
+    return max(MIN_SECONDS, min(MAX_SECONDS, value))
+
+
+def row_has_valid_context_data(row) -> bool:
+    temperature = pd.to_numeric(pd.Series([row.get("temperature")]), errors="coerce").iloc[0]
+    drying = pd.to_numeric(pd.Series([row.get("forecast_drying_factor")]), errors="coerce").iloc[0]
+
+    if pd.isna(temperature):
         return False
 
-    if soil_moisture <= 0 or soil_temperature <= 0:
+    if pd.isna(drying):
         return False
 
     return True
 
 
-def apply_blocking_rules(row, seconds: float) -> tuple[float, str]:
-    weather_is_raining_last = int(row.get("weather_is_raining_last", 0) or 0)
-    soil_temp_is_extreme = int(row.get("soil_temp_is_extreme", 0) or 0)
-    forecast_rain_prob = float(row.get("forecast_precipitation_probability", 0.0) or 0.0)
+def fallback_seconds_from_row(row) -> float:
+    drying = pd.to_numeric(pd.Series([row.get("forecast_drying_factor")]), errors="coerce").iloc[0]
+    temp = pd.to_numeric(pd.Series([row.get("temperature")]), errors="coerce").iloc[0]
+    raining = pd.to_numeric(pd.Series([row.get("weather_is_raining_last")]), errors="coerce").iloc[0]
+    precip = pd.to_numeric(
+        pd.Series([row.get("forecast_precipitation_probability")]), errors="coerce"
+    ).iloc[0]
 
-    if not row.get("has_valid_soil_data", False):
-        return 0.0, "missing_soil_data"
+    if pd.isna(drying):
+        drying = 0.0
+    if pd.isna(temp):
+        temp = 20.0
+    if pd.isna(raining):
+        raining = 0
+    if pd.isna(precip):
+        precip = 0.0
 
-    if float(row.get("soil_moisture", 0.0) or 0.0) >= SOIL_MOISTURE_THRESHOLD:
-        return 0.0, "soil_moisture_ok"
+    seconds = 13.0
 
-    if weather_is_raining_last == 1:
-        return 0.0, "raining_now_or_recently"
+    if drying >= 0.75:
+        seconds += 15.0
+    elif drying >= 0.55:
+        seconds += 10.0
+    elif drying >= 0.35:
+        seconds += 5.0
 
-    if soil_temp_is_extreme == 1:
-        return 0.0, "soil_temp_extreme"
+    if temp >= 30:
+        seconds += 10.0
+    elif temp >= 25:
+        seconds += 5.0
 
-    if forecast_rain_prob >= 80:
-        return 0.0, "high_rain_probability"
+    if raining == 1:
+        seconds -= 10.0
 
-    return float(seconds), "soil_moisture_below_threshold"
+    if precip >= 70:
+        seconds -= 10.0
+    elif precip >= 40:
+        seconds -= 5.0
 
-
-def adjust_seconds_by_conditions(row, predicted_seconds: float) -> float:
-    seconds = float(predicted_seconds)
-
-    forecast_rain_prob = float(row.get("forecast_precipitation_probability", 0.0) or 0.0)
-    drying_factor = float(row.get("forecast_drying_factor", 0.0) or 0.0)
-    temperature = float(row.get("temperature", 0.0) or 0.0)
-
-    if forecast_rain_prob >= 50:
-        seconds *= 0.7
-
-    if drying_factor >= 0.7:
-        seconds *= 1.25
-    elif drying_factor >= 0.4:
-        seconds *= 1.10
-    elif drying_factor <= 0.15:
-        seconds *= 0.85
-
-    if temperature >= 30:
-        seconds *= 1.15
-    elif temperature <= 10:
-        seconds *= 0.85
-
-    return seconds
+    return clamp_seconds(seconds)
 
 
-def build_decision_reason(row) -> str:
-    return str(row.get("decision_reason_raw", "unknown"))
+def zone_model_exists(zone: str) -> bool:
+    zone_slug = slugify_zone(zone)
+    classifier_path = os.path.join(MODEL_DIR, zone_slug, "classifier.joblib")
+    metadata_path = os.path.join(MODEL_DIR, zone_slug, "metadata.json")
+    return os.path.exists(classifier_path) and os.path.exists(metadata_path)
 
 
-def log_zone_prediction(zone: str, row: dict) -> None:
-    print(
-        (
-            f"[{zone}] "
-            f"soil_moisture={row.get('soil_moisture')} "
-            f"threshold={SOIL_MOISTURE_THRESHOLD} "
-            f"valid_soil={row.get('has_valid_soil_data')} "
-            f"watering_proba={row.get('watering_proba')} "
-            f"raw_seconds={row.get('raw_predicted_seconds')} "
-            f"adjusted_seconds={row.get('predicted_seconds')} "
-            f"should_water={row.get('should_water')} "
-            f"reason={row.get('decision_reason')}"
-        ),
-        file=sys.stderr,
-    )
+def build_no_model_result(zone: str) -> dict:
+    return {
+        "zone": zone,
+        "should_water": False,
+        "decision_reason": "No hi ha model entrenat per a esta zona",
+        "predicted_seconds": 0.0,
+        "probability": 0.0,
+        "used_model": False,
+    }
+
+
+def build_error_result(zone: str, message: str) -> dict:
+    return {
+        "zone": zone,
+        "should_water": False,
+        "decision_reason": message,
+        "predicted_seconds": 0.0,
+        "probability": 0.0,
+        "used_model": False,
+    }
+
+
+def predict_zone(zone: str) -> dict:
+    if not zone_model_exists(zone):
+        return build_no_model_result(zone)
+
+    try:
+        clf, reg, metadata = load_models_for_zone(zone)
+    except FileNotFoundError:
+        return build_no_model_result(zone)
+    except Exception as e:
+        return build_error_result(zone, f"Error carregant el model: {str(e)}")
+
+    try:
+        df = load_prediction_data(zone=zone, lookback="-30d")
+    except Exception as e:
+        return build_error_result(zone, f"Error carregant dades de predicció: {str(e)}")
+
+    if df.empty:
+        return build_error_result(zone, "No hi ha dades de predicció disponibles")
+
+    try:
+        X_predict, df_enriched = build_prediction_dataset(df, metadata)
+    except Exception as e:
+        return build_error_result(zone, f"Error construint el dataset de predicció: {str(e)}")
+
+    if X_predict.empty:
+        return build_error_result(zone, "No hi ha features suficients per fer la predicció")
+
+    row = df_enriched.iloc[-1]
+
+    if not row_has_valid_context_data(row):
+        return build_error_result(zone, "Falten dades de context (weather/forecast) per a la predicció")
+
+    try:
+        proba = float(safe_predict_proba(clf, X_predict)[-1])
+    except Exception as e:
+        return build_error_result(zone, f"Error calculant la probabilitat: {str(e)}")
+
+    threshold = float(metadata.get("classification_threshold", DEFAULT_THRESHOLD))
+    should_water = proba >= threshold
+
+    predicted_seconds = 0.0
+    if should_water:
+        if reg is not None:
+            try:
+                reg_pred = float(reg.predict(X_predict)[-1])
+                predicted_seconds = clamp_seconds(reg_pred)
+            except Exception:
+                predicted_seconds = fallback_seconds_from_row(row)
+        else:
+            predicted_seconds = fallback_seconds_from_row(row)
+
+    reasons = []
+
+    drying = pd.to_numeric(pd.Series([row.get("forecast_drying_factor")]), errors="coerce").iloc[0]
+    temp = pd.to_numeric(pd.Series([row.get("temperature")]), errors="coerce").iloc[0]
+    precip = pd.to_numeric(
+        pd.Series([row.get("forecast_precipitation_probability")]), errors="coerce"
+    ).iloc[0]
+    raining = pd.to_numeric(pd.Series([row.get("weather_is_raining_last")]), errors="coerce").iloc[0]
+
+    if not pd.isna(drying):
+        reasons.append(f"drying_factor={float(drying):.2f}")
+    if not pd.isna(temp):
+        reasons.append(f"temperature={float(temp):.1f}")
+    if not pd.isna(precip):
+        reasons.append(f"forecast_precipitation_probability={float(precip):.1f}")
+    if not pd.isna(raining):
+        reasons.append(f"weather_is_raining_last={int(raining)}")
+
+    decision_reason = f"Predicció per franja intermèdia (p={proba:.2f}, threshold={threshold:.2f})"
+    if reasons:
+        decision_reason += " | " + ", ".join(reasons)
+
+    return {
+        "zone": zone,
+        "should_water": bool(should_water),
+        "decision_reason": decision_reason,
+        "predicted_seconds": float(predicted_seconds),
+        "probability": proba,
+        "used_model": True,
+    }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zone", help="Prediu només una zona concreta")
+    parser.add_argument("--json", action="store_true", help="Força eixida JSON")
+    return parser.parse_args()
 
 
 def main():
-    zones = load_available_zones(start="-180d")
+    args = parse_args()
+
+    if args.zone:
+        zones = [args.zone]
+    else:
+        zones = load_available_zones(start="-180d")
 
     if not zones:
         print("[]")
         return
 
-    results = []
+    results = [predict_zone(zone) for zone in zones]
 
-    for zone in zones:
-        print(f"Predint zona: {zone}", file=sys.stderr)
+    # Només zones que realment s'han de regar
+    watering_results = [result for result in results if result.get("should_water") is True]
 
-        try:
-            clf, reg, metadata = load_models_for_zone(zone)
-        except FileNotFoundError:
-            print(f"No s'han trobat models per a la zona {zone}, la salto", file=sys.stderr)
-            continue
-        except RuntimeError as e:
-            print(f"Error carregant models per a {zone}: {e}", file=sys.stderr)
-            continue
-
-        df = load_prediction_data(zone=zone, lookback="-30d")
-
-        if df.empty:
-            print(f"Sense dades de predicció per a la zona {zone}, la salto", file=sys.stderr)
-            continue
-
-        X_predict, df_predict = build_prediction_dataset(df, metadata)
-
-        if X_predict.empty:
-            print(f"Sense features per a la zona {zone}, la salto", file=sys.stderr)
-            continue
-
-        df_predict = df_predict.copy()
-
-        df_predict["watering_proba"] = safe_predict_proba(clf, X_predict)
-        df_predict["raw_predicted_seconds"] = 0.0
-
-        if reg is not None:
-            try:
-                df_predict["raw_predicted_seconds"] = reg.predict(X_predict)
-            except Exception as e:
-                print(f"Error calculant predicted_seconds per a {zone}: {e}", file=sys.stderr)
-                df_predict["raw_predicted_seconds"] = 0.0
-
-        df_predict["raw_predicted_seconds"] = pd.to_numeric(
-            df_predict["raw_predicted_seconds"], errors="coerce"
-        ).fillna(0.0)
-
-        df_predict["raw_predicted_seconds"] = df_predict["raw_predicted_seconds"].clip(lower=0.0)
-
-        if "soil_temp_is_extreme" not in df_predict.columns:
-            df_predict["soil_temp_is_extreme"] = 0
-
-        df_predict["soil_temp_is_extreme"] = pd.to_numeric(
-            df_predict["soil_temp_is_extreme"], errors="coerce"
-        ).fillna(0).astype(int)
-
-        df_predict["soil_moisture"] = pd.to_numeric(
-            df_predict.get("soil_moisture", 0.0), errors="coerce"
-        )
-
-        df_predict["soil_temperature"] = pd.to_numeric(
-            df_predict.get("soil_temperature", 0.0), errors="coerce"
-        )
-
-        df_predict["forecast_precipitation_probability"] = pd.to_numeric(
-            df_predict.get("forecast_precipitation_probability", 0.0), errors="coerce"
-        ).fillna(0.0)
-
-        df_predict["forecast_drying_factor"] = pd.to_numeric(
-            df_predict.get("forecast_drying_factor", 0.0), errors="coerce"
-        ).fillna(0.0)
-
-        df_predict["weather_is_raining_last"] = pd.to_numeric(
-            df_predict.get("weather_is_raining_last", 0), errors="coerce"
-        ).fillna(0).astype(int)
-
-        df_predict["temperature"] = pd.to_numeric(
-            df_predict.get("temperature", 0.0), errors="coerce"
-        ).fillna(0.0)
-
-        df_predict["has_valid_soil_data"] = df_predict.apply(row_has_valid_soil_data, axis=1)
-
-        df_predict["predicted_seconds"] = 0.0
-        df_predict["decision_reason_raw"] = "unknown"
-
-        for idx, row in df_predict.iterrows():
-            base_seconds, reason = apply_blocking_rules(row, row["raw_predicted_seconds"])
-
-            if base_seconds > 0:
-                adjusted_seconds = adjust_seconds_by_conditions(row, base_seconds)
-            else:
-                adjusted_seconds = 0.0
-
-            adjusted_seconds = max(0.0, min(float(adjusted_seconds), MAX_SECONDS))
-
-            if adjusted_seconds < MIN_SECONDS:
-                adjusted_seconds = 0.0
-                if reason == "soil_moisture_below_threshold":
-                    reason = "below_minimum_runtime"
-
-            df_predict.at[idx, "predicted_seconds"] = adjusted_seconds
-            df_predict.at[idx, "decision_reason_raw"] = reason
-
-        df_predict["should_water"] = df_predict["predicted_seconds"] > 0.0
-        df_predict["predicted_seconds"] = df_predict["predicted_seconds"].round(1)
-        df_predict["decision_reason"] = df_predict.apply(build_decision_reason, axis=1)
-
-        output_columns = [
-            "_time",
-            "zone",
-            "temperature",
-            "weather_is_raining_last",
-            "forecast_temperature",
-            "forecast_relative_humidity",
-            "forecast_precipitation_probability",
-            "forecast_cloud_cover",
-            "forecast_shortwave_radiation",
-            "forecast_drying_factor",
-            "days_since_last_watering",
-            "soil_moisture",
-            "soil_temperature",
-            "soil_moisture_diff",
-            "has_valid_soil_data",
-            "watering_proba",
-            "raw_predicted_seconds",
-            "should_water",
-            "predicted_seconds",
-            "decision_reason",
-        ]
-
-        for col in output_columns:
-            if col not in df_predict.columns:
-                df_predict[col] = None
-
-        records = df_predict[output_columns].copy().to_dict(orient="records")
-
-        for record in records:
-            log_zone_prediction(zone, record)
-
-        results.extend(records)
-
-    print(json.dumps(results, default=str, indent=2, ensure_ascii=False))
+    print(json.dumps(watering_results, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

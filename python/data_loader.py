@@ -433,6 +433,7 @@ def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.Da
         for col in df_forecast_selected.columns:
             df[col] = df_forecast_selected[col]
 
+    # En training sí que cal la humitat per poder filtrar la franja intermèdia.
     df = _merge_sensor_asof_by_zone(df, df_soil_moisture, ["soil_moisture"])
     df = _merge_sensor_asof_by_zone(df, df_soil_temperature, ["soil_temperature"])
 
@@ -440,10 +441,11 @@ def load_training_data(zone: Optional[str] = None, start: str = "-90d") -> pd.Da
 
 
 def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> pd.DataFrame:
+    # En predicció ja NO carreguem soil_moisture.
+    # Go ja haurà decidit si toca cridar el model o no.
     df_weather = load_weather_data(start=lookback)
     df_logs = load_logs_data(zone=zone, start=lookback)
     df_forecast = load_forecast_data(start=lookback)
-    df_soil_moisture = load_soil_moisture_data(zone=zone, start=lookback)
     df_soil_temperature = load_soil_temperature_data(zone=zone, start=lookback)
 
     if df_weather.empty:
@@ -495,15 +497,6 @@ def load_prediction_data(zone: Optional[str] = None, lookback: str = "-30d") -> 
         latest_weather[key] = value
 
     zone_normalized = normalize_zone(zone) if zone else None
-
-    if zone_normalized and not df_soil_moisture.empty:
-        moisture_zone = df_soil_moisture[df_soil_moisture["zone"] == zone_normalized].sort_values("_time")
-        latest_weather["soil_moisture"] = (
-            float(moisture_zone.iloc[-1]["soil_moisture"])
-            if not moisture_zone.empty else None
-        )
-    else:
-        latest_weather["soil_moisture"] = None
 
     if zone_normalized and not df_soil_temperature.empty:
         temp_zone = df_soil_temperature[df_soil_temperature["zone"] == zone_normalized].sort_values("_time")

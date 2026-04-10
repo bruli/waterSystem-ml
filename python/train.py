@@ -30,9 +30,20 @@ def main():
         print("y_classifier counts:")
         print(data["y_classifier"].value_counts(dropna=False))
         print("Feature columns:", data["metadata"]["feature_columns"])
+        print(
+            "Training scope:",
+            data["metadata"].get("training_scope", "unknown"),
+        )
+        print(
+            "Soil moisture thresholds:",
+            data["metadata"].get("soil_moisture_low_threshold"),
+            data["metadata"].get("soil_moisture_high_threshold"),
+        )
 
         if data["X_classifier"].empty or data["y_classifier"].empty:
-            print(f"Sense dades útils per classifier a {zone}, la salto")
+            print(
+                f"Sense dades útils dins de la franja intermèdia per classifier a {zone}, la salto"
+            )
             continue
 
         unique_classes = sorted(data["y_classifier"].dropna().unique().tolist())
@@ -54,6 +65,7 @@ def main():
                 n_estimators=100,
                 random_state=42,
                 class_weight="balanced",
+                min_samples_leaf=3,
             )
             clf.fit(data["X_classifier"], data["y_classifier"])
 
@@ -62,6 +74,7 @@ def main():
             reg = RandomForestRegressor(
                 n_estimators=100,
                 random_state=42,
+                min_samples_leaf=2,
             )
             reg.fit(data["X_regressor"], data["y_regressor"])
         else:

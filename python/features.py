@@ -9,15 +9,16 @@ FEATURE_COLUMNS = [
     "forecast_cloud_cover",
     "forecast_shortwave_radiation",
     "forecast_drying_factor",
-    "soil_moisture",
     "soil_temperature",
-    "soil_moisture_diff",
     "soil_temp_is_extreme",
     "hour",
     "day_of_week",
     "month",
     "days_since_last_watering",
 ]
+
+SOIL_MOISTURE_LOW_THRESHOLD = 40.0
+SOIL_MOISTURE_HIGH_THRESHOLD = 60.0
 
 
 def normalize_zone(zone: str) -> str:
@@ -67,16 +68,13 @@ def add_sensor_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy().sort_values("_time")
 
     df["soil_moisture"] = pd.to_numeric(
-        df.get("soil_moisture", 0.0), errors="coerce"
+        df.get("soil_moisture", None), errors="coerce"
     )
     df["soil_temperature"] = pd.to_numeric(
         df.get("soil_temperature", 0.0), errors="coerce"
     )
 
-    df["soil_moisture"] = df["soil_moisture"].fillna(0.0)
     df["soil_temperature"] = df["soil_temperature"].fillna(0.0)
-
-    df["soil_moisture_diff"] = df["soil_moisture"].diff().fillna(0.0)
 
     df["soil_temp_is_extreme"] = (
             (df["soil_temperature"] < 5.0) | (df["soil_temperature"] > 30.0)
@@ -85,7 +83,7 @@ def add_sensor_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_training_dataset(df: pd.DataFrame):
+def prepare_base_dataset(df: pd.DataFrame) -> pd.DataFrame:
     df = add_time_features(df)
     df = add_watering_history(df)
     df = add_sensor_features(df)
@@ -94,6 +92,10 @@ def build_training_dataset(df: pd.DataFrame):
 
     if "forecast_temperature" not in df.columns:
         df["forecast_temperature"] = df["temperature"]
+
+    df["forecast_temperature"] = pd.to_numeric(
+        df.get("forecast_temperature", df["temperature"]), errors="coerce"
+    )
 
     df["forecast_relative_humidity"] = pd.to_numeric(
         df.get("forecast_relative_humidity", 0.0), errors="coerce"
@@ -115,21 +117,34 @@ def build_training_dataset(df: pd.DataFrame):
         df.get("forecast_drying_factor", 0.0), errors="coerce"
     ).fillna(0.0)
 
-    df["soil_moisture"] = pd.to_numeric(
-        df.get("soil_moisture", 0.0), errors="coerce"
-    ).fillna(0.0)
+    df["weather_is_raining_last"] = pd.to_numeric(
+        df.get("weather_is_raining_last", 0), errors="coerce"
+    ).fillna(0).astype(int)
 
     df["soil_temperature"] = pd.to_numeric(
         df.get("soil_temperature", 0.0), errors="coerce"
     ).fillna(0.0)
 
-    df["soil_moisture_diff"] = pd.to_numeric(
-        df.get("soil_moisture_diff", 0.0), errors="coerce"
-    ).fillna(0.0)
-
     df["soil_temp_is_extreme"] = pd.to_numeric(
         df.get("soil_temp_is_extreme", 0), errors="coerce"
     ).fillna(0).astype(int)
+
+    return df
+
+
+def filter_middle_band(df: pd.DataFrame) -> pd.DataFrame:
+    # Ací sí usem soil_moisture, però NOMÉS per seleccionar
+    # les mostres històriques que corresponen a la franja intermèdia.
+    df = df.dropna(subset=["soil_moisture"]).copy()
+
+    return df[
+        (df["soil_moisture"] >= SOIL_MOISTURE_LOW_THRESHOLD) &
+        (df["soil_moisture"] <= SOIL_MOISTURE_HIGH_THRESHOLD)
+        ].copy()
+
+
+def build_training_dataset(df: pd.DataFrame):
+    df = prepare_base_dataset(df)
 
     if df.empty:
         return {
@@ -139,22 +154,46 @@ def build_training_dataset(df: pd.DataFrame):
             "y_regressor": pd.Series(dtype="float64"),
             "metadata": {
                 "feature_columns": FEATURE_COLUMNS,
-                "classification_threshold": 0.3,
-                "model_version": "v4",
+                "classification_threshold": 0.30,
+                "model_version": "v5_hybrid_middle_band",
+                "soil_moisture_low_threshold": SOIL_MOISTURE_LOW_THRESHOLD,
+                "soil_moisture_high_threshold": SOIL_MOISTURE_HIGH_THRESHOLD,
+                "training_scope": "middle_band_only",
             },
         }
 
-    X = df[FEATURE_COLUMNS].copy()
-    y_classifier = (df["seconds"] > 0).astype(int)
+    df_band = filter_middle_band(df)
 
-    df_reg = df[df["seconds"] > 0].copy()
+    if df_band.empty:
+        return {
+            "X_classifier": pd.DataFrame(),
+            "y_classifier": pd.Series(dtype="int64"),
+            "X_regressor": pd.DataFrame(),
+            "y_regressor": pd.Series(dtype="float64"),
+            "metadata": {
+                "feature_columns": FEATURE_COLUMNS,
+                "classification_threshold": 0.30,
+                "model_version": "v5_hybrid_middle_band",
+                "soil_moisture_low_threshold": SOIL_MOISTURE_LOW_THRESHOLD,
+                "soil_moisture_high_threshold": SOIL_MOISTURE_HIGH_THRESHOLD,
+                "training_scope": "middle_band_only",
+            },
+        }
+
+    X = df_band[FEATURE_COLUMNS].copy()
+    y_classifier = (df_band["seconds"] > 0).astype(int)
+
+    df_reg = df_band[df_band["seconds"] > 0].copy()
     X_reg = df_reg[FEATURE_COLUMNS].copy()
     y_reg = df_reg["seconds"].copy()
 
     metadata = {
         "feature_columns": FEATURE_COLUMNS,
-        "classification_threshold": 0.3,
-        "model_version": "v4",
+        "classification_threshold": 0.30,
+        "model_version": "v5_hybrid_middle_band",
+        "soil_moisture_low_threshold": SOIL_MOISTURE_LOW_THRESHOLD,
+        "soil_moisture_high_threshold": SOIL_MOISTURE_HIGH_THRESHOLD,
+        "training_scope": "middle_band_only",
     }
 
     return {
@@ -167,12 +206,8 @@ def build_training_dataset(df: pd.DataFrame):
 
 
 def build_prediction_dataset(df: pd.DataFrame, metadata: dict):
-    df = add_time_features(df)
-    df = add_watering_history(df)
-    df = add_sensor_features(df)
-
-    if "forecast_temperature" not in df.columns:
-        df["forecast_temperature"] = df["temperature"]
+    # En predicció, Python no hauria de dependre de soil_moisture.
+    df = prepare_base_dataset(df)
 
     for col in metadata["feature_columns"]:
         if col not in df.columns:
