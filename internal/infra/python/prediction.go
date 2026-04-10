@@ -12,13 +12,22 @@ import (
 )
 
 type Prediction struct {
-	Time                             string  `json:"time"`
+	Time                             string  `json:"_time"`
 	Zone                             string  `json:"zone"`
 	Temperature                      float64 `json:"temperature"`
 	WeatherIsRainingLast             int     `json:"weather_is_raining_last"`
+	ForecastTemperature              float64 `json:"forecast_temperature"`
+	ForecastRelativeHumidity         float64 `json:"forecast_relative_humidity"`
 	ForecastPrecipitationProbability float64 `json:"forecast_precipitation_probability"`
+	ForecastCloudCover               float64 `json:"forecast_cloud_cover"`
+	ForecastShortwaveRadiation       float64 `json:"forecast_shortwave_radiation"`
+	ForecastDryingFactor             float64 `json:"forecast_drying_factor"`
 	DaysSinceLastWatering            float64 `json:"days_since_last_watering"`
+	SoilMoisture                     float64 `json:"soil_moisture"`
+	SoilTemperature                  float64 `json:"soil_temperature"`
+	SoilMoistureDiff                 float64 `json:"soil_moisture_diff"`
 	WateringProba                    float64 `json:"watering_proba"`
+	RawPredictedSeconds              float64 `json:"raw_predicted_seconds"`
 	ShouldWater                      bool    `json:"should_water"`
 	PredictedSeconds                 float64 `json:"predicted_seconds"`
 	DecisionReason                   string  `json:"decision_reason"`
