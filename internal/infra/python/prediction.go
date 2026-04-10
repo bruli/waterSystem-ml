@@ -36,7 +36,7 @@ type Prediction struct {
 func parsePredictions(output string) ([]Prediction, error) {
 	var predictions []Prediction
 	if err := json.Unmarshal([]byte(output), &predictions); err != nil {
-		return nil, fmt.Errorf("error parsing predictions: %s", err)
+		return nil, fmt.Errorf("error parsing predictions JSON: %w; output=%q", err, output)
 	}
 	return predictions, nil
 }

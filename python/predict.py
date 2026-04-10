@@ -1,4 +1,6 @@
 import json
+import sys
+
 import numpy as np
 import pandas as pd
 
@@ -100,7 +102,8 @@ def log_zone_prediction(zone: str, row: dict) -> None:
             f"adjusted_seconds={row.get('predicted_seconds')} "
             f"should_water={row.get('should_water')} "
             f"reason={row.get('decision_reason')}"
-        )
+        ),
+        file=sys.stderr,
     )
 
 
@@ -114,27 +117,27 @@ def main():
     results = []
 
     for zone in zones:
-        print(f"Predint zona: {zone}")
+        print(f"Predint zona: {zone}", file=sys.stderr)
 
         try:
             clf, reg, metadata = load_models_for_zone(zone)
         except FileNotFoundError:
-            print(f"No s'han trobat models per a la zona {zone}, la salto")
+            print(f"No s'han trobat models per a la zona {zone}, la salto", file=sys.stderr)
             continue
         except RuntimeError as e:
-            print(f"Error carregant models per a {zone}: {e}")
+            print(f"Error carregant models per a {zone}: {e}", file=sys.stderr)
             continue
 
         df = load_prediction_data(zone=zone, lookback="-30d")
 
         if df.empty:
-            print(f"Sense dades de predicció per a la zona {zone}, la salto")
+            print(f"Sense dades de predicció per a la zona {zone}, la salto", file=sys.stderr)
             continue
 
         X_predict, df_predict = build_prediction_dataset(df, metadata)
 
         if X_predict.empty:
-            print(f"Sense features per a la zona {zone}, la salto")
+            print(f"Sense features per a la zona {zone}, la salto", file=sys.stderr)
             continue
 
         df_predict = df_predict.copy()
@@ -146,7 +149,7 @@ def main():
             try:
                 df_predict["raw_predicted_seconds"] = reg.predict(X_predict)
             except Exception as e:
-                print(f"Error calculant predicted_seconds per a {zone}: {e}")
+                print(f"Error calculant predicted_seconds per a {zone}: {e}", file=sys.stderr)
                 df_predict["raw_predicted_seconds"] = 0.0
 
         df_predict["raw_predicted_seconds"] = pd.to_numeric(
@@ -228,6 +231,7 @@ def main():
             "soil_moisture",
             "soil_temperature",
             "soil_moisture_diff",
+            "has_valid_soil_data",
             "watering_proba",
             "raw_predicted_seconds",
             "should_water",
