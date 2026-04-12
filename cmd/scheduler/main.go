@@ -14,35 +14,42 @@ import (
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 	telegram "github.com/bruli/watersystem-ml/internal/infra/Telegram"
 	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
+	"github.com/bruli/watersystem-ml/internal/infra/influxdb2"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
-	"go.opentelemetry.io/otel"
-
 	"github.com/robfig/cron/v3"
+	"go.opentelemetry.io/otel"
 )
 
 const serviceName = "watersystem-ml"
 
 func main() {
-	ctx := context.Background()
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	log := buildLog()
+
+	ctx := context.Background()
 
 	conf, err := config.New()
 	if err != nil {
 		log.ErrorContext(ctx, "error loading config", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	tracingProv, err := tracing.InitTracing(ctx, serviceName)
 	if err != nil {
 		log.ErrorContext(ctx, "Error initializing tracing", "err", err)
-		os.Exit(1)
+		return err
 	}
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 
-		if err = tracingProv.Shutdown(shutdownCtx); err != nil {
+		if err := tracingProv.Shutdown(shutdownCtx); err != nil {
 			log.ErrorContext(ctx, "Error shutting down tracing", "err", err)
 		}
 	}()
@@ -55,28 +62,37 @@ func main() {
 	telegramPublisher, err := telegram.NewMessagePublisher(conf.TelegramToken, conf.TelegramChatID, conf.IsProd())
 	if err != nil {
 		log.ErrorContext(ctx, "Error creating telegram publisher", "err", err)
-		os.Exit(1)
+		return err
 	}
+	soilMeasureRepo := influxdb2.NewSoilMeasureRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
-	predictionSvc := ml.NewGetPrediction(predictionRepo, tracer)
+	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer)
 	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer)
 
-	cron, err := buildCron()
+	cronJob, err := buildCron()
 	if err != nil {
 		log.ErrorContext(ctx, "Error creating cron", "err", err)
-		os.Exit(1)
+		return err
 	}
 
+	errCh := make(chan error)
+	defer close(errCh)
+
 	go initialTraining(ctx, conf, log, trainSvc)
-	go trainingCron(ctx, log, cron, trainSvc)
+	go func(ch chan error) {
+		if err := trainingCron(ctx, log, cronJob, trainSvc); err != nil {
+			log.ErrorContext(ctx, "Error adding cron job", "err", err)
+			ch <- err
+		}
+	}(errCh)
 	go runPrediction(ctx, log, appPredictionSvc)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
 	if err != nil {
 		log.ErrorContext(ctx, "Error starting server", "err", err)
-		os.Exit(1)
+		return err
 	}
 	defer func() {
 		_ = serverListener.Close()
@@ -88,7 +104,16 @@ func main() {
 		_ = srv.Shutdown(ctx)
 	}()
 
-	runHTTPServer(ctx, srv, log, serverListener)
+	go func(ch chan error) {
+		if err := runHTTPServer(ctx, srv, log, serverListener); err != nil {
+			ch <- err
+		}
+	}(errCh)
+
+	if err := <-errCh; err != nil {
+		return err
+	}
+	return nil
 }
 
 func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, svc *ml.Train) {
@@ -107,19 +132,19 @@ func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger,
 	executeTraining(ctx, log, svc)
 }
 
-func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.Train) {
+func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.Train) error {
 	defer c.Stop()
 	_, err := c.AddFunc("* 3 * * *", func() {
 		executeTraining(ctx, log, svc)
 	})
 	if err != nil {
-		log.ErrorContext(ctx, "Error adding cron job", "err", err)
-		os.Exit(1)
+		return err
 	}
 	log.InfoContext(ctx, "Training cron started")
 	c.Start()
 	<-ctx.Done()
 	log.InfoContext(ctx, "Training cron stopped")
+	return nil
 }
 
 func executeTraining(ctx context.Context, log *slog.Logger, svc *ml.Train) {
@@ -128,7 +153,7 @@ func executeTraining(ctx context.Context, log *slog.Logger, svc *ml.Train) {
 	}
 }
 
-func checkDir(path string) (exists bool, empty bool, err error) {
+func checkDir(path string) (exists, empty bool, err error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -185,20 +210,21 @@ func buildLog() *slog.Logger {
 	return log
 }
 
-func runHTTPServer(ctx context.Context, srv *http.Server, log *slog.Logger, serverListener net.Listener) {
+func runHTTPServer(ctx context.Context, srv *http.Server, log *slog.Logger, serverListener net.Listener) error {
 	go shutdown(ctx, srv, log)
 
 	if err := srv.Serve(serverListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.ErrorContext(ctx, "Error starting server", "err", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
 func shutdown(ctx context.Context, srv *http.Server, log *slog.Logger) {
 	<-ctx.Done()
 	log.InfoContext(ctx, "Ctrl+C received, shutting down server")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {

@@ -9,6 +9,10 @@ type Config struct {
 	TelegramToken  string `env:"TELEGRAM_TOKEN,required"`
 	TelegramChatID int    `env:"TELEGRAM_CHAT_ID,required"`
 	Env            string `env:"ENV" envDefault:"PROD"`
+	InfluxDBURL    string `env:"INFLUXDB_URL,required"`
+	InfluxDBToken  string `env:"INFLUXDB_TOKEN,required"`
+	InfluxDBOrg    string `env:"INFLUXDB_ORG,required"`
+	InfluxDBBucket string `env:"INFLUXDB_BUCKET,required"`
 }
 
 func New() (*Config, error) {

@@ -13,7 +13,7 @@ PY := $(VENV)/bin/python
 
 .PHONY: help venv install clean train predict shell docker-down docker-exec docker-logs\
  	docker-ps docker-up docker-influxdb-seed fmt security install-lint lint check\
- 	docker-login docker-push-image edit-secrets apply-secrets docker-train docker-predict
+ 	docker-login docker-push-image test docker-train docker-predict
 
 .DEFAULT_GOAL := help
 
@@ -21,7 +21,7 @@ DOCKERFILE ?= Dockerfile
 
 IMAGE_REG  ?= ghcr.io/bruli
 IMAGE_NAME := $(IMAGE_REG)/$(APP)
-VERSION    ?= 0.4.2
+VERSION    ?= 0.5.0
 CURRENT_IMAGE := $(IMAGE_NAME):$(VERSION)
 
 GOLANGCI_LINT_VERSION ?= v2.11.4
@@ -134,16 +134,13 @@ lint: install-lint
 	echo "🚀 Executing golangci-lint..."; \
     golangci-lint run ./...
 
-check: fmt security lint
-
-edit-secrets:
+test:
 	@set -euo pipefail; \
-  	sops manifests/secret.sops.yaml
+	echo "🧪 Running unit tests (race, JSON → tparse)..."; \
+	go test -race ./... -json -cover -coverprofile=coverage.out| go tool tparse -all
 
-apply-secrets:
-	@set -euo pipefail; \
-	echo "🚀 Applying secrets in k3s..."; \
-	sops -d manifests/secret.sops.yaml | kubectl apply -f -
+check: fmt security lint test
+
 
 # ────────────────────────────────────────────────────────────────
 # ℹ️ Help

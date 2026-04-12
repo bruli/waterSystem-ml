@@ -70,7 +70,8 @@ func (p PredictionRepository) Get(ctx context.Context) ([]ml.Prediction, error) 
 func buildPredictionsDomain(predictions []Prediction) []ml.Prediction {
 	pred := make([]ml.Prediction, len(predictions))
 
-	for i, p := range predictions {
+	for i := range predictions {
+		p := &predictions[i]
 		prediction := ml.NewPrediction(p.Zone, p.ShouldWater, p.PredictedSeconds, p.DecisionReason)
 		pred[i] = *prediction
 	}

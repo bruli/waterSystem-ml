@@ -7,7 +7,7 @@ entrypoint = "./tmp/server"
 full_bin = "./tmp/server"
 
 include_ext = ["go", "env"]
-exclude_dir = ["tmp", "vendor", ".git"]
+exclude_dir = ["tmp", "vendor", ".git", "manifests", "mockserver", "python", "scripts", ".github"]
 exclude_regex = ["_test.go"]
 
 delay = 200
