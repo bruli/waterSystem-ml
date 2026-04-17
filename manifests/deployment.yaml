@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.6.1
+      - image: ghcr.io/bruli/watersystem-ml:0.7.0
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
@@ -71,6 +71,14 @@ spec:
                   key: chat_id
             - name: ENV
               value: PROD
+            - name: WATER_SYSTEM_HOST
+              value: http://192.168.1.10
+            - name: WATER_SYSTEM_PORT
+              value: "8080"
+            - name: WATER_SYSTEM_TOKEN
+                secretKeyRef:
+                    name: watersystem-secret
+                    key: token
         readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 3

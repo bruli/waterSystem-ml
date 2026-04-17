@@ -12,11 +12,13 @@ import (
 	"github.com/bruli/watersystem-ml/internal/app"
 	"github.com/bruli/watersystem-ml/internal/config"
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
+	"github.com/bruli/watersystem-ml/internal/domain/watering"
 	telegram "github.com/bruli/watersystem-ml/internal/infra/Telegram"
 	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
 	"github.com/bruli/watersystem-ml/internal/infra/influxdb2"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
+	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
 	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -65,10 +67,12 @@ func run() error {
 		return err
 	}
 	soilMeasureRepo := influxdb2.NewSoilMeasureRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
+	waterSystemExecutor := watersystem.NewExecutor(5*time.Second, tracer, conf.WaterSystemHost, conf.WaterSystemPort, conf.WaterSystemToken)
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer)
-	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer)
+	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
+	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer, executeSvc)
 
 	cronJob, err := buildCron()
 	if err != nil {

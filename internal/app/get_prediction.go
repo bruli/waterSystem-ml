@@ -5,20 +5,22 @@ import (
 	"fmt"
 
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
+	"github.com/bruli/watersystem-ml/internal/domain/watering"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type GetPrediction struct {
-	svc    *ml.GetPrediction
-	pub    Publisher
-	tracer trace.Tracer
+	predictionSvc *ml.GetPrediction
+	pub           Publisher
+	tracer        trace.Tracer
+	executeSvc    *watering.Execute
 }
 
 func (p GetPrediction) Get(ctx context.Context) ([]ml.Prediction, error) {
 	ctx, span := p.tracer.Start(ctx, "app.GetPrediction")
 	defer span.End()
-	predictions, err := p.svc.Get(ctx)
+	predictions, err := p.predictionSvc.Get(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -27,16 +29,14 @@ func (p GetPrediction) Get(ctx context.Context) ([]ml.Prediction, error) {
 
 	for _, prediction := range predictions {
 		if prediction.ShouldWater() {
-			msg := fmt.Sprintf(
-				"ML Prediction\n Watering zone: %s\n seconds: %v\n reason: %s\n",
-				prediction.Zone(),
-				prediction.PredictedSeconds(),
-				prediction.DecisionReason(),
-			)
-			if err = p.pub.Publish(ctx, msg); err != nil {
+			i, err := p.publishMessage(ctx, prediction, span)
+			if err != nil {
+				return i, err
+			}
+			if err := p.executeSvc.Execute(ctx, watering.New(prediction.Zone(), int(prediction.PredictedSeconds()))); err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, err.Error())
-				return nil, err
+				return i, err
 			}
 		}
 	}
@@ -45,6 +45,21 @@ func (p GetPrediction) Get(ctx context.Context) ([]ml.Prediction, error) {
 	return predictions, nil
 }
 
-func NewGetPrediction(svc *ml.GetPrediction, pub Publisher, tracer trace.Tracer) *GetPrediction {
-	return &GetPrediction{svc: svc, pub: pub, tracer: tracer}
+func (p GetPrediction) publishMessage(ctx context.Context, prediction ml.Prediction, span trace.Span) ([]ml.Prediction, error) {
+	msg := fmt.Sprintf(
+		"ML Prediction\n Watering zone: %s\n seconds: %v\n reason: %s\n",
+		prediction.Zone(),
+		prediction.PredictedSeconds(),
+		prediction.DecisionReason(),
+	)
+	if err := p.pub.Publish(ctx, msg); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return nil, nil
+}
+
+func NewGetPrediction(svc *ml.GetPrediction, pub Publisher, tracer trace.Tracer, executeSvc *watering.Execute) *GetPrediction {
+	return &GetPrediction{predictionSvc: svc, pub: pub, tracer: tracer, executeSvc: executeSvc}
 }
