@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.7.0
+      - image: ghcr.io/bruli/watersystem-ml:0.7.1
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
@@ -76,6 +76,7 @@ spec:
             - name: WATER_SYSTEM_PORT
               value: "8080"
             - name: WATER_SYSTEM_TOKEN
+              valueFrom:
                 secretKeyRef:
                     name: watersystem-secret
                     key: token
