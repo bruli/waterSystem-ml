@@ -39,8 +39,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with high humidity, then it returns empty list",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 100)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 100)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.33)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.33)),
 			},
 			expected: []ml.Prediction{},
 		},
@@ -48,8 +48,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with low humidity in one zone, then it returns one prediction",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 100)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 30)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.33)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.66)),
 			},
 			expected: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone small", true, 20, "Low humidity")),
@@ -59,8 +59,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with low humidity in all zones, then it returns two predictions",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 30)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 30)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.66)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.66)),
 			},
 			expected: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone big", true, 20, "Low humidity")),
@@ -71,8 +71,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with medium humidity in all zones and prediction repository returns an error, then it returns a get prediction error",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 50)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 50)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.42)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.42)),
 			},
 			expectedErr:   ml.GetPredictionError{},
 			predictionErr: errTest,
@@ -82,8 +82,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with medium humidity in all zones and prediction repository returns an zones to water, then it returns two predictions",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 50)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 50)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.42)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.42)),
 			},
 			predictions: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone big", true, 32, "Medium humidity level")),
@@ -99,8 +99,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with medium humidity only in one zone and prediction repository returns an zones to water, then it returns one prediction",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 50)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 80)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.42)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.33)),
 			},
 			predictions: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone big", true, 32, "Medium humidity level")),
@@ -115,8 +115,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with medium and low humidity and prediction repository returns an zones to water, then it returns two prediction",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 50)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 30)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.42)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.66)),
 			},
 			predictions: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone big", true, 32, "Medium humidity level")),
@@ -132,8 +132,8 @@ func TestGetPrediction_Get(t *testing.T) {
 			name: "and soilMeasureRepo returns soil measures with medium humidity and prediction repository returns an zones not water, then it returns empty list",
 			args: defaultArgs,
 			soilMeasure: []ml.SoilMeasure{
-				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 50)),
-				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 50)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone big", 1.42)),
+				ptr.FromPointer(ml.NewSoilMeasure("Zone small", 1.42)),
 			},
 			predictions: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction("Zone big", false, 0, "Enough humidity")),

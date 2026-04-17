@@ -24,7 +24,7 @@ func (s SoilMeasureRepository) Get(ctx context.Context) ([]ml.SoilMeasure, error
 	query := `
 from(bucket: "bonsai-data")
   |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement =~ /soil_moisture/)
+  |> filter(fn: (r) => r._measurement =~ /soil_moisture_voltage/)
   |> filter(fn: (r) => r._field == "value")
   |> group(columns: ["entity_id"])
   |> last()

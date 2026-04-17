@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	LowHumidity    = 40
-	MediumHumidity = 65
+	LowHumidity  = 1.46
+	HighHumidity = 1.4
 )
 
 type GetPrediction struct {
@@ -36,10 +36,12 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 	result := make([]Prediction, 0)
 	for _, m := range sm {
 		switch {
-		case m.Humidity() < LowHumidity:
+		case m.Humidity() > LowHumidity:
 			pred := NewPrediction(m.Zone(), true, 20, "Low humidity")
 			result = append(result, *pred)
-		case m.Humidity() < MediumHumidity:
+		case m.Humidity() < HighHumidity:
+			continue
+		default:
 			pred, err := g.getPrediction(ctx, m.Zone(), span)
 			if err != nil {
 				err := GetPredictionError{msg: "error getting prediction", err: err}
@@ -50,8 +52,6 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 			if pred != nil {
 				result = append(result, *pred)
 			}
-		default:
-			continue
 		}
 	}
 
