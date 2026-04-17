@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	LowHumidity  = 1.46
-	HighHumidity = 1.4
+	LowHumidity  = 1.48
+	HighHumidity = 1.42
 )
 
 type GetPrediction struct {
