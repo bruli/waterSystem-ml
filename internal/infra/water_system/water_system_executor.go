@@ -13,9 +13,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var zones = map[string]string{
-	"Bonsai big":   "bb",
-	"Bonsai small": "bs",
+type Zone struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type ExecuteBody struct {
@@ -26,12 +26,13 @@ type Executor struct {
 	cl                *http.Client
 	tracer            trace.Tracer
 	host, port, token string
+	zones             map[string]string
 }
 
 func (e Executor) Execute(ctx context.Context, w *watering.Watering) error {
 	ctx, span := e.tracer.Start(ctx, "WaterSystem.Execute")
 	defer span.End()
-	zone, ok := zones[w.Zone()]
+	zone, ok := e.zones[w.Zone()]
 	if !ok {
 		err := fmt.Errorf("invalid zone: %s", w.Zone())
 		span.RecordError(err)
@@ -75,7 +76,46 @@ func (e Executor) Execute(ctx context.Context, w *watering.Watering) error {
 	return nil
 }
 
-func NewExecutor(timeout time.Duration, tracer trace.Tracer, host, port, token string) *Executor {
+func (e Executor) getZones(ctx context.Context) error {
+	ctx, span := e.tracer.Start(ctx, "WaterSystem.getZones")
+	defer span.End()
+	url := fmt.Sprintf("%s:%s/zones", e.host, e.port)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return fmt.Errorf("error creating request: %s", err)
+	}
+	req.Header.Set("Authorization", e.token)
+
+	resp, err := e.cl.Do(req)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if err != nil {
+		err := fmt.Errorf("error executing request: %s", err)
+		span.RecordError(err)
+		return err
+	}
+	var zonesBody []Zone
+	if err := json.NewDecoder(resp.Body).Decode(&zonesBody); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return fmt.Errorf("error decoding response: %s", err)
+	}
+	e.zones = make(map[string]string)
+	for _, z := range zonesBody {
+		e.zones[z.Name] = z.ID
+	}
+	span.SetStatus(codes.Ok, "OK")
+	return nil
+}
+
+func NewExecutor(ctx context.Context, timeout time.Duration, tracer trace.Tracer, host, port, token string) (*Executor, error) {
 	cl := http.Client{Timeout: timeout}
-	return &Executor{tracer: tracer, host: host, port: port, cl: &cl, token: host}
+	ex := Executor{tracer: tracer, host: host, port: port, cl: &cl, token: host}
+	if err := ex.getZones(ctx); err != nil {
+		return nil, err
+	}
+	return &ex, nil
 }

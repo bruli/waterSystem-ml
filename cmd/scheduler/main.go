@@ -67,7 +67,11 @@ func run() error {
 		return err
 	}
 	soilMeasureRepo := influxdb2.NewSoilMeasureRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
-	waterSystemExecutor := watersystem.NewExecutor(5*time.Second, tracer, conf.WaterSystemHost, conf.WaterSystemPort, conf.WaterSystemToken)
+	waterSystemExecutor, err := watersystem.NewExecutor(ctx, 5*time.Second, tracer, conf.WaterSystemHost, conf.WaterSystemPort, conf.WaterSystemToken)
+	if err != nil {
+		log.ErrorContext(ctx, "Error creating water system executor", "err", err)
+		return err
+	}
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer)
