@@ -30,7 +30,7 @@ type Executor struct {
 	zones             map[string]string
 }
 
-func (e Executor) Execute(ctx context.Context, w *watering.Watering) error {
+func (e *Executor) Execute(ctx context.Context, w *watering.Watering) error {
 	ctx, span := e.tracer.Start(ctx, "WaterSystem.Execute")
 	defer span.End()
 	zone, ok := e.zones[w.Zone()]
@@ -54,8 +54,8 @@ func (e Executor) Execute(ctx context.Context, w *watering.Watering) error {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("error creating request: %s", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", e.token)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", e.token)
 
 	resp, err := e.cl.Do(req)
 	defer func() {
@@ -77,7 +77,7 @@ func (e Executor) Execute(ctx context.Context, w *watering.Watering) error {
 	return nil
 }
 
-func (e Executor) getZones(ctx context.Context) error {
+func (e *Executor) getZones(ctx context.Context) error {
 	ctx, span := e.tracer.Start(ctx, "WaterSystem.getZones")
 	defer span.End()
 	url := fmt.Sprintf("%s:%s/zones", e.host, e.port)
@@ -87,15 +87,22 @@ func (e Executor) getZones(ctx context.Context) error {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("error creating request: %s", err)
 	}
-	req.Header.Set("Authorization", e.token)
+	req.Header.Add("Authorization", e.token)
 
 	resp, err := e.cl.Do(req)
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 	if err != nil {
 		err := fmt.Errorf("error executing request: %s", err)
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("error executing request: %s", resp.Status)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	var zonesBody []Zone
@@ -110,17 +117,18 @@ func (e Executor) getZones(ctx context.Context) error {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("error decoding response: %s", err)
 	}
-	e.zones = make(map[string]string)
+	zones := make(map[string]string)
 	for _, z := range zonesBody {
-		e.zones[z.Name] = z.ID
+		zones[z.Name] = z.ID
 	}
+	e.zones = zones
 	span.SetStatus(codes.Ok, "OK")
 	return nil
 }
 
 func NewExecutor(ctx context.Context, timeout time.Duration, tracer trace.Tracer, host, port, token string) (*Executor, error) {
 	cl := http.Client{Timeout: timeout}
-	ex := Executor{tracer: tracer, host: host, port: port, cl: &cl, token: host}
+	ex := Executor{tracer: tracer, host: host, port: port, cl: &cl, token: token}
 	if err := ex.getZones(ctx); err != nil {
 		return nil, err
 	}
