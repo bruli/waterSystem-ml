@@ -8,11 +8,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const (
-	LowHumidity  = 1.48
-	HighHumidity = 1.42
-)
-
 type GetPrediction struct {
 	predictionRepo  PredictionRepository
 	soilMeasureRepo SoilMeasureRepository
@@ -36,10 +31,10 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 	result := make([]Prediction, 0)
 	for _, m := range sm {
 		switch {
-		case m.Humidity() > LowHumidity:
+		case m.Humidity() > LowHumidity():
 			pred := NewPrediction(m.Zone(), true, 20, "Low humidity")
 			result = append(result, *pred)
-		case m.Humidity() < HighHumidity:
+		case m.Humidity() < HighHumidity():
 			continue
 		default:
 			pred, err := g.getPrediction(ctx, m.Zone(), span)
