@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -98,7 +99,13 @@ func (e Executor) getZones(ctx context.Context) error {
 		return err
 	}
 	var zonesBody []Zone
-	if err := json.NewDecoder(resp.Body).Decode(&zonesBody); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return fmt.Errorf("error reading response: %s", err)
+	}
+	if err := json.Unmarshal(body, &zonesBody); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("error decoding response: %s", err)
