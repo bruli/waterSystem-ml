@@ -2,6 +2,7 @@ package ml
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"go.opentelemetry.io/otel/codes"
@@ -14,6 +15,7 @@ type GetPrediction struct {
 	tracer          trace.Tracer
 	predictions     map[string]*Prediction
 	m               sync.Mutex
+	log             *slog.Logger
 }
 
 func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
@@ -30,11 +32,17 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 	}
 	result := make([]Prediction, 0)
 	for _, m := range sm {
+		hum, ok := Humidities[m.Zone()]
+		if !ok {
+			g.log.WarnContext(ctx, "unknown zone", slog.String("zone", m.Zone()))
+			continue
+		}
+		humidity := m.Humidity()
 		switch {
-		case m.Humidity() > LowHumidity():
+		case hum.IsLow(humidity):
 			pred := NewPrediction(m.Zone(), true, 20, "Low humidity")
 			result = append(result, *pred)
-		case m.Humidity() < HighHumidity():
+		case hum.IsHigh(humidity):
 			continue
 		default:
 			pred, err := g.getPrediction(ctx, m.Zone(), span)
@@ -82,8 +90,20 @@ func (g *GetPrediction) getPrediction(ctx context.Context, zone string, span tra
 	return nil, nil
 }
 
-func NewGetPrediction(predictionRepo PredictionRepository, soilMeasureRepo SoilMeasureRepository, tracer trace.Tracer) *GetPrediction {
-	return &GetPrediction{predictionRepo: predictionRepo, tracer: tracer, soilMeasureRepo: soilMeasureRepo, predictions: make(map[string]*Prediction)}
+func NewGetPrediction(
+	predictionRepo PredictionRepository,
+	soilMeasureRepo SoilMeasureRepository,
+	tracer trace.Tracer,
+	log *slog.Logger,
+) *GetPrediction {
+	return &GetPrediction{
+		predictionRepo:  predictionRepo,
+		soilMeasureRepo: soilMeasureRepo,
+		tracer:          tracer,
+		predictions:     make(map[string]*Prediction),
+		m:               sync.Mutex{},
+		log:             log,
+	}
 }
 
 type GetPredictionError struct {

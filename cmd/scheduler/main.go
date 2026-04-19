@@ -74,7 +74,7 @@ func run() error {
 	}
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
-	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer)
+	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer, log)
 	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
 	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer, executeSvc)
 
