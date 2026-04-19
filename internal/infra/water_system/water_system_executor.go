@@ -42,7 +42,7 @@ func (e *Executor) Execute(ctx context.Context, w *watering.Watering) error {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	url := fmt.Sprintf("%s:%s/zones%s/execute", e.host, e.port, zone)
+	url := fmt.Sprintf("%s:%s/zones/%s/execute", e.host, e.port, zone)
 	body := ExecuteBody{Seconds: w.Seconds()}
 	data, err := json.Marshal(body)
 	if err != nil {
