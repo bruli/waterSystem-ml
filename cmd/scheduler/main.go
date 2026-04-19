@@ -181,7 +181,7 @@ func checkDir(path string) (exists, empty bool, err error) {
 }
 
 func runPrediction(ctx context.Context, log *slog.Logger, svc *app.GetPrediction) {
-	tick := time.NewTicker(2 * time.Minute)
+	tick := time.NewTicker(15 * time.Minute)
 	defer tick.Stop()
 
 	for {
