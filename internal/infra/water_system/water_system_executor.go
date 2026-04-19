@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -28,6 +29,7 @@ type Executor struct {
 	tracer            trace.Tracer
 	host, port, token string
 	zones             map[string]string
+	logger            *slog.Logger
 }
 
 func (e *Executor) Execute(ctx context.Context, w *watering.Watering) error {
@@ -117,8 +119,10 @@ func (e *Executor) getZones(ctx context.Context) error {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("error decoding response: %s", err)
 	}
+	e.logger.InfoContext(ctx, "Zones found", slog.Int("count", len(zonesBody)))
 	zones := make(map[string]string)
 	for _, z := range zonesBody {
+		e.logger.InfoContext(ctx, "Zone", slog.String("name", z.Name), slog.String("id", z.ID))
 		zones[z.Name] = z.ID
 	}
 	e.zones = zones
@@ -126,9 +130,9 @@ func (e *Executor) getZones(ctx context.Context) error {
 	return nil
 }
 
-func NewExecutor(ctx context.Context, timeout time.Duration, tracer trace.Tracer, host, port, token string) (*Executor, error) {
+func NewExecutor(ctx context.Context, timeout time.Duration, tracer trace.Tracer, host, port, token string, log *slog.Logger) (*Executor, error) {
 	cl := http.Client{Timeout: timeout}
-	ex := Executor{tracer: tracer, host: host, port: port, cl: &cl, token: token}
+	ex := Executor{tracer: tracer, host: host, port: port, cl: &cl, token: token, logger: log}
 	if err := ex.getZones(ctx); err != nil {
 		return nil, err
 	}
