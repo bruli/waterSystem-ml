@@ -10,6 +10,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var zones = map[string]string{
+	"bonsai_big_bonsai_big_soil_voltage": "Bonsai big",
+}
+
 type SoilMeasureRepository struct {
 	client influxdb.Client
 	org    string
@@ -38,9 +42,13 @@ from(bucket: "bonsai-data")
 		record := result.Record()
 
 		entity := record.ValueByKey("entity_id")
-		zone, ok := entity.(string)
+		zoneFormated, ok := entity.(string)
 		if !ok {
 			return nil, fmt.Errorf("error parsing soil moisture entity_id: %s", err)
+		}
+		zone, ok := zones[zoneFormated]
+		if !ok {
+			return nil, fmt.Errorf("invalid zone: %s", zoneFormated)
 		}
 		value := record.Value()
 		humidity, ok := value.(float64)
