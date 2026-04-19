@@ -11,7 +11,7 @@ import (
 )
 
 var zones = map[string]string{
-	"bonsai_big_bonsai_big_soil_voltage": "Bonsai big",
+	"bonsai_big_bonsai_big_soil_moisture_voltage": "Bonsai big",
 }
 
 type SoilMeasureRepository struct {
@@ -28,7 +28,7 @@ func (s SoilMeasureRepository) Get(ctx context.Context) ([]ml.SoilMeasure, error
 	query := `
 from(bucket: "bonsai-data")
   |> range(start: -24h)
-  |> filter(fn: (r) => r._measurement == "sensor.bonsai_big_bonsai_big_soil_voltage")
+  |> filter(fn: (r) => r._measurement == "sensor.bonsai_big_bonsai_big_soil_moisture_voltage")
   |> filter(fn: (r) => r._field == "value")
   |> last()
 `
