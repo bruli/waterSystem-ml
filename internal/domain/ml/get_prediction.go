@@ -32,6 +32,9 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 		return nil, err
 	}
 	span.SetAttributes(attribute.Int("soil_measures_voltage_count", len(sm)))
+	if len(sm) == 0 {
+		g.log.WarnContext(ctx, "no soil measures found")
+	}
 	result := make([]Prediction, 0)
 	for _, m := range sm {
 		hum, ok := Humidities[m.Zone()]
