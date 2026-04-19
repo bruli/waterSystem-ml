@@ -31,6 +31,7 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
+	span.SetAttributes(attribute.Int("soil_measures_voltage_count", len(sm)))
 	result := make([]Prediction, 0)
 	for _, m := range sm {
 		hum, ok := Humidities[m.Zone()]
