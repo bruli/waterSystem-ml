@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -17,13 +18,13 @@ type GetPrediction struct {
 	predictions     map[string]*Prediction
 	m               sync.Mutex
 	log             *slog.Logger
+	timeFunc        func() time.Time
 }
 
 func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 	ctx, span := g.tracer.Start(ctx, "GetPrediction")
 	defer span.End()
 	defer clear(g.predictions)
-
 	sm, err := g.soilMeasureRepo.Get(ctx)
 	if err != nil {
 		err := GetPredictionError{msg: "error getting soil measures", err: err}
@@ -57,6 +58,10 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 		case hum.IsHigh(humidity):
 			continue
 		default:
+			if g.isNightRange() {
+				span.SetStatus(codes.Ok, "night time")
+				return result, nil
+			}
 			pred, err := g.getPrediction(ctx, m.Zone(), span)
 			if err != nil {
 				err := GetPredictionError{msg: "error getting prediction", err: err}
@@ -102,11 +107,17 @@ func (g *GetPrediction) getPrediction(ctx context.Context, zone string, span tra
 	return nil, nil
 }
 
+func (g *GetPrediction) isNightRange() bool {
+	now := g.timeFunc().Hour()
+	return now > 22 || now < 8
+}
+
 func NewGetPrediction(
 	predictionRepo PredictionRepository,
 	soilMeasureRepo SoilMeasureRepository,
 	tracer trace.Tracer,
 	log *slog.Logger,
+	timeFunc func() time.Time,
 ) *GetPrediction {
 	return &GetPrediction{
 		predictionRepo:  predictionRepo,
@@ -115,6 +126,7 @@ func NewGetPrediction(
 		predictions:     make(map[string]*Prediction),
 		m:               sync.Mutex{},
 		log:             log,
+		timeFunc:        timeFunc,
 	}
 }
 

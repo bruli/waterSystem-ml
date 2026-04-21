@@ -74,7 +74,13 @@ func run() error {
 	}
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
-	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer, log)
+	predictionSvc := ml.NewGetPrediction(predictionRepo, soilMeasureRepo, tracer, log, func() time.Time {
+		loc, err := time.LoadLocation("Europe/Madrid")
+		if err != nil {
+			log.ErrorContext(ctx, "Error loading location", "err", err)
+		}
+		return time.Now().In(loc)
+	})
 	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
 	appPredictionSvc := app.NewGetPrediction(predictionSvc, telegramPublisher, tracer, executeSvc)
 
