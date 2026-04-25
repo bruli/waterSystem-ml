@@ -27,10 +27,11 @@ func (s SoilMeasureRepository) Get(ctx context.Context) ([]ml.SoilMeasure, error
 
 	query := `
 from(bucket: "bonsai-data")
-  |> range(start: -24h)
+  |> range(start: -40m)
   |> filter(fn: (r) => r._measurement == "sensor.bonsai_big_bonsai_big_soil_moisture_voltage")
   |> filter(fn: (r) => r._field == "value")
-  |> last()
+  |> filter(fn: (r) => r._value >= 0.5 and r._value <= 3.3)
+  |> median()
 `
 	result, err := s.client.QueryAPI(s.org).Query(ctx, query)
 	if err != nil {
