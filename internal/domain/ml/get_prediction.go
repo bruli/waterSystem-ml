@@ -109,7 +109,7 @@ func (g *GetPrediction) getPrediction(ctx context.Context, zone string, span tra
 
 func (g *GetPrediction) isNightRange() bool {
 	now := g.timeFunc().Hour()
-	return now > 22 || now < 8
+	return now > 22 || now <= 8
 }
 
 func NewGetPrediction(
