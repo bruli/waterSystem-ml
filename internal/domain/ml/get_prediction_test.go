@@ -21,12 +21,12 @@ func TestGetPrediction_Get(t *testing.T) {
 	require.True(t, ok)
 	bbHigh := randomFloat(bb.MaxHumidity(), bb.HighHumidity())
 	bbLow := randomFloat(bb.LowHumidity(), bb.MinHumidity())
-	bbMedium := 1.430
+	bbMedium := 1.630
 	bs, ok := humidity["Bonsai small"]
 	require.True(t, ok)
 	bsHigh := randomFloat(bs.MaxHumidity(), bs.HighHumidity())
 	bsLow := randomFloat(bs.LowHumidity(), bb.MinHumidity())
-	bsMedium := 1.430
+	bsMedium := 1.630
 	errTest := errors.New("test")
 	type args struct {
 		ctx context.Context

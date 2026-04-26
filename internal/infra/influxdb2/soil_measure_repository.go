@@ -11,7 +11,8 @@ import (
 )
 
 var zones = map[string]string{
-	"bonsai_big_bonsai_big_soil_moisture_voltage": "Bonsai big",
+	"bonsai_big_bonsai_big_soil_moisture_voltage":     "Bonsai big",
+	"bonsai_small_bonsai_small_soil_moisture_voltage": "Bonsai small",
 }
 
 type SoilMeasureRepository struct {
@@ -26,11 +27,17 @@ func (s SoilMeasureRepository) Get(ctx context.Context) ([]ml.SoilMeasure, error
 	defer span.End()
 
 	query := `
+measurements = [
+  "sensor.bonsai_big_bonsai_big_soil_moisture_voltage",
+  "sensor.bonsai_small_bonsai_small_soil_moisture_voltage"
+]
+
 from(bucket: "bonsai-data")
   |> range(start: -40m)
-  |> filter(fn: (r) => r._measurement == "sensor.bonsai_big_bonsai_big_soil_moisture_voltage")
+  |> filter(fn: (r) => contains(value: r._measurement, set: measurements))
   |> filter(fn: (r) => r._field == "value")
   |> filter(fn: (r) => r._value >= 0.5 and r._value <= 3.3)
+  |> group(columns: ["_measurement"])
   |> median()
 `
 	result, err := s.client.QueryAPI(s.org).Query(ctx, query)
