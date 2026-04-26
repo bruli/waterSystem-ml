@@ -11,8 +11,8 @@ import (
 )
 
 var zones = map[string]string{
-	"bonsai_big_bonsai_big_soil_moisture_voltage":     "Bonsai big",
-	"bonsai_small_bonsai_small_soil_moisture_voltage": "Bonsai small",
+	"sensor.bonsai_big_bonsai_big_soil_moisture_voltage":     "Bonsai big",
+	"sensor.bonsai_small_bonsai_small_soil_moisture_voltage": "Bonsai small",
 }
 
 type SoilMeasureRepository struct {
