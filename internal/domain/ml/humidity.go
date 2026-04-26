@@ -1,48 +1,46 @@
 package ml
 
 var Humidities = map[string]*Humidity{
-	"Bonsai big":   NewHumidity(2.000, 1.363, 40, 60),
-	"Bonsai small": NewHumidity(2.000, 1.27, 40, 60),
+	"Bonsai big":   NewHumidity(1.544, 1.363),
+	"Bonsai small": NewHumidity(1.646, 1.27),
 }
 
 type Humidity struct {
-	minHumidity, maxHumidity     float64
-	minPercentage, maxPercentage float64
+	v40  float64
+	v100 float64
 }
 
-func (h Humidity) MinHumidity() float64 {
-	return h.minHumidity
+func (h Humidity) V40() float64 {
+	return h.v40
 }
 
-func (h Humidity) MaxHumidity() float64 {
-	return h.maxHumidity
+func (h Humidity) V100() float64 {
+	return h.v100
 }
 
-func (h Humidity) calculate(percentage float64) float64 {
-	return h.minHumidity + (h.maxHumidity-h.minHumidity)*percentage/100
+func NewHumidity(v40, v100 float64) *Humidity {
+	return &Humidity{
+		v40:  v40,
+		v100: v100,
+	}
+}
+
+func (h Humidity) voltageForPercentage(p float64) float64 {
+	return h.v100 + (h.v40-h.v100)*((100-p)/60)
 }
 
 func (h Humidity) LowHumidity() float64 {
-	return h.calculate(h.minPercentage)
+	return h.v40
 }
 
 func (h Humidity) HighHumidity() float64 {
-	return h.calculate(h.maxPercentage)
+	return h.voltageForPercentage(60)
 }
 
 func (h Humidity) IsLow(v float64) bool {
-	return v > h.LowHumidity()
+	return v >= h.LowHumidity()
 }
 
 func (h Humidity) IsHigh(v float64) bool {
-	return v < h.HighHumidity()
-}
-
-func NewHumidity(minHumidity, maxHumidity, minPercentage, maxPercentage float64) *Humidity {
-	return &Humidity{
-		minHumidity:   minHumidity,
-		maxHumidity:   maxHumidity,
-		minPercentage: minPercentage,
-		maxPercentage: maxPercentage,
-	}
+	return v <= h.HighHumidity()
 }

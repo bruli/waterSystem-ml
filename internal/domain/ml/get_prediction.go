@@ -45,8 +45,6 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 		}
 		humidity := m.Humidity()
 		span.SetAttributes(
-			attribute.Float64("minimum_humidity", hum.MinHumidity()),
-			attribute.Float64("maximum_humidity", hum.MaxHumidity()),
 			attribute.Float64("high_humidity", hum.HighHumidity()),
 			attribute.Float64("low_humidity", hum.LowHumidity()),
 			attribute.Float64("current_humidity", humidity),
