@@ -34,36 +34,45 @@ measurements = [
 
 from(bucket: "bonsai-data")
   |> range(start: -40m)
-  |> filter(fn: (r) => contains(value: r._measurement, set: measurements))
+  |> filter(fn: (r) => contains(set: measurements, value: r._measurement))
   |> filter(fn: (r) => r._field == "value")
   |> filter(fn: (r) => r._value >= 0.5 and r._value <= 3.3)
   |> group(columns: ["_measurement"])
   |> median()
 `
+
 	result, err := s.client.QueryAPI(s.org).Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("error querying soil moisture in influxdb: %s", err)
+		return nil, fmt.Errorf("error querying soil moisture in influxdb: %w", err)
 	}
+
 	measures := make([]ml.SoilMeasure, 0)
+
 	for result.Next() {
 		record := result.Record()
 
-		entity := record.ValueByKey("entity_id")
-		zoneFormated, ok := entity.(string)
+		measurement, ok := record.ValueByKey("_measurement").(string)
 		if !ok {
-			return nil, fmt.Errorf("error parsing soil moisture entity_id: %s", err)
+			return nil, fmt.Errorf("error parsing soil moisture measurement")
 		}
-		zone, ok := zones[zoneFormated]
+
+		zone, ok := zones[measurement]
 		if !ok {
-			return nil, fmt.Errorf("invalid zone: %s", zoneFormated)
+			return nil, fmt.Errorf("invalid zone: %s", measurement)
 		}
-		value := record.Value()
-		humidity, ok := value.(float64)
+
+		humidity, ok := record.Value().(float64)
 		if !ok {
-			return nil, fmt.Errorf("error parsing soil moisture value: %s", err)
+			return nil, fmt.Errorf("error parsing soil moisture value")
 		}
+
 		measures = append(measures, ptr.FromPointer(ml.NewSoilMeasure(zone, humidity)))
 	}
+
+	if result.Err() != nil {
+		return nil, fmt.Errorf("error reading soil moisture result: %w", result.Err())
+	}
+
 	return measures, nil
 }
 
