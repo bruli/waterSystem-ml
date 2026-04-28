@@ -139,3 +139,69 @@ func (mock *SoilMeasureRepositoryMock) GetCalls() []struct {
 	mock.lockGet.RUnlock()
 	return calls
 }
+
+// Ensure, that ExecutionRepositoryMock does implement ExecutionRepository.
+// If this is not the case, regenerate this file with moq.
+var _ ExecutionRepository = &ExecutionRepositoryMock{}
+
+// ExecutionRepositoryMock is a mock implementation of ExecutionRepository.
+//
+//	func TestSomethingThatUsesExecutionRepository(t *testing.T) {
+//
+//		// make and configure a mocked ExecutionRepository
+//		mockedExecutionRepository := &ExecutionRepositoryMock{
+//			GetLastExecutionFunc: func(ctx context.Context) (Executions, error) {
+//				panic("mock out the GetLastExecution method")
+//			},
+//		}
+//
+//		// use mockedExecutionRepository in code that requires ExecutionRepository
+//		// and then make assertions.
+//
+//	}
+type ExecutionRepositoryMock struct {
+	// GetLastExecutionFunc mocks the GetLastExecution method.
+	GetLastExecutionFunc func(ctx context.Context) (Executions, error)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// GetLastExecution holds details about calls to the GetLastExecution method.
+		GetLastExecution []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+	}
+	lockGetLastExecution sync.RWMutex
+}
+
+// GetLastExecution calls GetLastExecutionFunc.
+func (mock *ExecutionRepositoryMock) GetLastExecution(ctx context.Context) (Executions, error) {
+	if mock.GetLastExecutionFunc == nil {
+		panic("ExecutionRepositoryMock.GetLastExecutionFunc: method is nil but ExecutionRepository.GetLastExecution was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockGetLastExecution.Lock()
+	mock.calls.GetLastExecution = append(mock.calls.GetLastExecution, callInfo)
+	mock.lockGetLastExecution.Unlock()
+	return mock.GetLastExecutionFunc(ctx)
+}
+
+// GetLastExecutionCalls gets all the calls that were made to GetLastExecution.
+// Check the length with:
+//
+//	len(mockedExecutionRepository.GetLastExecutionCalls())
+func (mock *ExecutionRepositoryMock) GetLastExecutionCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockGetLastExecution.RLock()
+	calls = mock.calls.GetLastExecution
+	mock.lockGetLastExecution.RUnlock()
+	return calls
+}

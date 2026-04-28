@@ -14,6 +14,7 @@ import (
 type GetPrediction struct {
 	predictionRepo  PredictionRepository
 	soilMeasureRepo SoilMeasureRepository
+	executionRepo   ExecutionRepository
 	tracer          trace.Tracer
 	predictions     map[string]*Prediction
 	m               sync.Mutex
@@ -36,8 +37,20 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 	if len(sm) == 0 {
 		g.log.WarnContext(ctx, "no soil measures found")
 	}
+	executions, err := g.executionRepo.GetLastExecution(ctx)
+	if err != nil {
+		err := GetPredictionError{msg: "error getting executions", err: err}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
 	result := make([]Prediction, 0)
 	for _, m := range sm {
+		executedZone, ok := executions[m.Zone()]
+		if !ok {
+			g.log.WarnContext(ctx, "no execution found", slog.String("zone", m.Zone()))
+			continue
+		}
 		hum, ok := Humidities[m.Zone()]
 		if !ok {
 			g.log.WarnContext(ctx, "unknown zone", slog.String("zone", m.Zone()))
@@ -51,6 +64,11 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 		)
 		switch {
 		case hum.IsLow(humidity):
+			if executedZone.IsRecentlyExecuted() {
+				g.log.WarnContext(ctx, "low humidity but recently executed", slog.String("zone", m.Zone()))
+				span.SetStatus(codes.Ok, "recently executed")
+				continue
+			}
 			pred := NewPrediction(m.Zone(), true, 20, "Low humidity")
 			result = append(result, *pred)
 		case hum.IsHigh(humidity):
@@ -60,16 +78,21 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 				span.SetStatus(codes.Ok, "night time")
 				return result, nil
 			}
-			//pred, err := g.getPrediction(ctx, m.Zone(), span)
-			//if err != nil {
-			//	err := GetPredictionError{msg: "error getting prediction", err: err}
-			//	span.RecordError(err)
-			//	span.SetStatus(codes.Error, err.Error())
-			//	return nil, err
-			//}
-			//if pred != nil {
-			//	result = append(result, *pred)
-			//}
+			if executedZone.IsRecentlyExecuted() {
+				g.log.WarnContext(ctx, "recently executed", slog.String("zone", m.Zone()))
+				span.SetStatus(codes.Ok, "recently executed")
+				continue
+			}
+			pred, err := g.getPrediction(ctx, m.Zone(), span)
+			if err != nil {
+				err := GetPredictionError{msg: "error getting prediction", err: err}
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				return nil, err
+			}
+			if pred != nil {
+				result = append(result, *pred)
+			}
 		}
 	}
 
@@ -113,6 +136,7 @@ func (g *GetPrediction) isNightRange() bool {
 func NewGetPrediction(
 	predictionRepo PredictionRepository,
 	soilMeasureRepo SoilMeasureRepository,
+	executionRepo ExecutionRepository,
 	tracer trace.Tracer,
 	log *slog.Logger,
 	timeFunc func() time.Time,
@@ -120,6 +144,7 @@ func NewGetPrediction(
 	return &GetPrediction{
 		predictionRepo:  predictionRepo,
 		soilMeasureRepo: soilMeasureRepo,
+		executionRepo:   executionRepo,
 		tracer:          tracer,
 		predictions:     make(map[string]*Prediction),
 		m:               sync.Mutex{},

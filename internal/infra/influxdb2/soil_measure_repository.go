@@ -7,6 +7,7 @@ import (
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 	"github.com/bruli/watersystem-ml/internal/ptr"
 	influxdb "github.com/influxdata/influxdb-client-go/v2"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -43,6 +44,8 @@ from(bucket: "bonsai-data")
 
 	result, err := s.client.QueryAPI(s.org).Query(ctx, query)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
 		return nil, fmt.Errorf("error querying soil moisture in influxdb: %w", err)
 	}
 
@@ -53,26 +56,38 @@ from(bucket: "bonsai-data")
 
 		measurement, ok := record.ValueByKey("_measurement").(string)
 		if !ok {
-			return nil, fmt.Errorf("error parsing soil moisture measurement")
+			err := fmt.Errorf("error parsing soil moisture measurement")
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+			return nil, err
 		}
 
 		zone, ok := zones[measurement]
 		if !ok {
-			return nil, fmt.Errorf("invalid zone: %s", measurement)
+			err := fmt.Errorf("invalid zone: %s", measurement)
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+			return nil, err
 		}
 
 		humidity, ok := record.Value().(float64)
 		if !ok {
-			return nil, fmt.Errorf("error parsing soil moisture value")
+			err := fmt.Errorf("error parsing soil moisture value")
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+			return nil, err
 		}
 
 		measures = append(measures, ptr.FromPointer(ml.NewSoilMeasure(zone, humidity)))
 	}
 
 	if result.Err() != nil {
-		return nil, fmt.Errorf("error reading soil moisture result: %w", result.Err())
+		err := fmt.Errorf("error reading soil moisture result: %w", result.Err())
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+		return nil, err
 	}
-
+	span.SetStatus(codes.Ok, "OK")
 	return measures, nil
 }
 

@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.9.7
+      - image: ghcr.io/bruli/watersystem-ml:0.9.8
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:

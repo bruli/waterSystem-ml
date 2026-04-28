@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewSoilMeasureRepository(t *testing.T) {
-	token := "LZQTcQ9lDjGZhiL5ZdVTqMK6r14jL59DWabOcPCb6ZvhmLcCxpqjyA0UcA8XDMpt"
+	token := ""
 	repo := influxdb2.NewSoilMeasureRepository("http://localhost:8086", token, "home", "bonsai-data", noop.NewTracerProvider().Tracer("test"))
 	_, err := repo.Get(t.Context())
 	require.NoError(t, err)
