@@ -60,16 +60,16 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 				span.SetStatus(codes.Ok, "night time")
 				return result, nil
 			}
-			pred, err := g.getPrediction(ctx, m.Zone(), span)
-			if err != nil {
-				err := GetPredictionError{msg: "error getting prediction", err: err}
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, err
-			}
-			if pred != nil {
-				result = append(result, *pred)
-			}
+			//pred, err := g.getPrediction(ctx, m.Zone(), span)
+			//if err != nil {
+			//	err := GetPredictionError{msg: "error getting prediction", err: err}
+			//	span.RecordError(err)
+			//	span.SetStatus(codes.Error, err.Error())
+			//	return nil, err
+			//}
+			//if pred != nil {
+			//	result = append(result, *pred)
+			//}
 		}
 	}
 
