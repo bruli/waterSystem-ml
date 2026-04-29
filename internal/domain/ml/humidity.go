@@ -1,7 +1,7 @@
 package ml
 
 var Humidities = map[string]*Humidity{
-	"Bonsai big":   NewHumidity(1.544, 1.363),
+	"Bonsai big":   NewHumidity(1.544, 1.300),
 	"Bonsai small": NewHumidity(1.646, 1.27),
 }
 
