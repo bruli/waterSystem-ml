@@ -73,7 +73,7 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 			result = append(result, *pred)
 		case hum.IsHigh(humidity):
 			continue
-		default:
+		case hum.InRange(humidity):
 			if g.isNightRange() {
 				span.SetStatus(codes.Ok, "night time")
 				return result, nil
@@ -93,6 +93,8 @@ func (g *GetPrediction) Get(ctx context.Context) ([]Prediction, error) {
 			if pred != nil {
 				result = append(result, *pred)
 			}
+		default:
+			continue
 		}
 	}
 

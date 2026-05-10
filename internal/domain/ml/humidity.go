@@ -37,10 +37,18 @@ func (h Humidity) HighHumidity() float64 {
 	return h.voltageForPercentage(60)
 }
 
+func (h Humidity) NotWorkingFineLimit() float64 {
+	return h.voltageForPercentage(15)
+}
+
 func (h Humidity) IsLow(v float64) bool {
-	return v >= h.LowHumidity()
+	return v >= h.LowHumidity() && v <= h.NotWorkingFineLimit()
 }
 
 func (h Humidity) IsHigh(v float64) bool {
 	return v <= h.HighHumidity()
+}
+
+func (h Humidity) InRange(v float64) bool {
+	return v <= h.LowHumidity() && v >= h.HighHumidity()
 }

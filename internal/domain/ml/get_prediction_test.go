@@ -20,12 +20,13 @@ func TestGetPrediction_Get(t *testing.T) {
 	bb, ok := humidity["Bonsai big"]
 	require.True(t, ok)
 	bbHigh := randomFloat(bb.V100(), bb.HighHumidity())
-	bbLow := randomFloat(bb.LowHumidity(), 2.000)
+	bbLow := randomFloat(bb.LowHumidity(), bb.NotWorkingFineLimit())
+	wrong := randomFloat(bb.NotWorkingFineLimit(), 3.000)
 	bbMedium := randomFloat(bb.V40(), bb.HighHumidity())
 	bs, ok := humidity["Bonsai small"]
 	require.True(t, ok)
 	bsHigh := randomFloat(bs.V100(), bs.HighHumidity())
-	bsLow := randomFloat(bs.LowHumidity(), 2.000)
+	bsLow := randomFloat(bs.LowHumidity(), bs.NotWorkingFineLimit())
 	bsMedium := randomFloat(bs.V40(), bs.HighHumidity())
 	errTest := errors.New("test")
 	oldExecutions := ml.Executions{
@@ -106,6 +107,28 @@ func TestGetPrediction_Get(t *testing.T) {
 				"Bonsai big":   ptr.FromPointer(ml.NewExecution("Bonsai big", time.Now().Add(-1*time.Hour))),
 				"Bonsai small": ptr.FromPointer(ml.NewExecution("Bonsai small", time.Now().Add(-1*time.Hour))),
 			},
+		},
+		{
+			name:     "and soilMeasureRepo returns soil measures with wrong humidity in all zones, then it returns nil",
+			args:     defaultArgs,
+			timeFunc: defaultTimeFunc,
+			soilMeasure: []ml.SoilMeasure{
+				ptr.FromPointer(ml.NewSoilMeasure("Bonsai big", wrong)),
+				ptr.FromPointer(ml.NewSoilMeasure("Bonsai small", wrong)),
+			},
+			expected:   []ml.Prediction{},
+			executions: oldExecutions,
+		},
+		{
+			name:     "and soilMeasureRepo returns soil measures with wrong humidity in one zones, then it returns nil",
+			args:     defaultArgs,
+			timeFunc: defaultTimeFunc,
+			soilMeasure: []ml.SoilMeasure{
+				ptr.FromPointer(ml.NewSoilMeasure("Bonsai big", wrong)),
+				ptr.FromPointer(ml.NewSoilMeasure("Bonsai small", bsHigh)),
+			},
+			expected:   []ml.Prediction{},
+			executions: oldExecutions,
 		},
 		{
 			name:     "and soilMeasureRepo returns soil measures with low humidity in all zones, then it returns two predictions",
