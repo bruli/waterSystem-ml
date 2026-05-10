@@ -32,24 +32,19 @@ func (p GetPrediction) Get(ctx context.Context) ([]ml.Prediction, error) {
 		if !prediction.ShouldWater() {
 			continue
 		}
-		i, err := p.publishMessage(ctx, prediction, span)
-		if err != nil {
-			return i, err
-		}
 		st, err := p.systemStatusSvc.GetStatus(ctx)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
-			return i, err
+			return nil, err
 		}
 		if !st.Active() {
 			span.SetStatus(codes.Error, "system is not active")
-			if err := p.pub.Publish(ctx, "system is not active"); err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return i, err
-			}
 			return nil, nil
+		}
+		i, err := p.publishMessage(ctx, prediction, span)
+		if err != nil {
+			return i, err
 		}
 		if err := p.executeSvc.Execute(ctx, watering.New(prediction.Zone(), int(prediction.PredictedSeconds()))); err != nil {
 			span.RecordError(err)
