@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -32,15 +33,14 @@ func main() {
 }
 
 func run() error {
-	log := buildLog()
-
 	ctx := context.Background()
 
 	conf, err := config.New()
 	if err != nil {
-		log.ErrorContext(ctx, "error loading config", "error", err)
+		fmt.Printf("Error loading config: %v\n", err)
 		return err
 	}
+	log := buildLog(conf.LogLevel)
 
 	tracingProv, err := tracing.InitTracing(ctx, serviceName)
 	if err != nil {
@@ -216,9 +216,17 @@ func runPrediction(ctx context.Context, log *slog.Logger, svc *app.GetPrediction
 	}
 }
 
-func buildLog() *slog.Logger {
+func buildLog(level string) *slog.Logger {
+	levels := map[string]slog.Level{
+		"info":  slog.LevelInfo,
+		"debug": slog.LevelDebug,
+		"error": slog.LevelError,
+		"warn":  slog.LevelWarn,
+	}
+	l := levels[level]
+
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: l,
 	})
 
 	log := slog.New(handler)
