@@ -29,6 +29,9 @@ services:
         - BONSAI_BIG_V40=1.600
         - BONSAI_SMALL_V100=1.350
         - BONSAI_SMALL_V40=1.600
+        - WATER_SYSTEM_HOST=localhost
+        - WATER_SYSTEM_PORT=8080
+        - WATER_SYSTEM_TOKEN=token
     depends_on:
       - influxdb
       - lgtm

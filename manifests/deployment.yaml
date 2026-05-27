@@ -20,7 +20,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-login
       containers:
-      - image: ghcr.io/bruli/watersystem-ml:0.12.0
+      - image: ghcr.io/bruli/watersystem-ml:0.12.1
         name: watersystem-ml
         imagePullPolicy: IfNotPresent
         ports:
@@ -87,13 +87,13 @@ spec:
                       name: ntfy-secret
                       key: password
             - name: BONSAI_BIG_V100
-              value: 1.300
+              value: "1.300"
             - name: BONSAI_BIG_V40
-              value: 1.472
+              value: "1.472"
             - name: BONSAI_SMALL_V100
-              value: 1.22
+              value: "1.22"
             - name: BONSAI_SMALL_V40
-              value: 1.732
+              value: "1.732"
 
         readinessProbe:
             httpGet: { path: /healthz, port: http }
