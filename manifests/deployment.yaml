@@ -93,7 +93,7 @@ spec:
             - name: BONSAI_SMALL_V100
               value: "1.35"
             - name: BONSAI_SMALL_V40
-              value: "1.70"
+              value: "1.801"
 
         readinessProbe:
             httpGet: { path: /healthz, port: http }
