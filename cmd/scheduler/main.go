@@ -15,8 +15,10 @@ import (
 	"github.com/bruli/watersystem-ml/internal/app"
 	"github.com/bruli/watersystem-ml/internal/config"
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
+	"github.com/bruli/watersystem-ml/internal/domain/watering"
 	httpinfra "github.com/bruli/watersystem-ml/internal/infra/http"
 	"github.com/bruli/watersystem-ml/internal/infra/influxdb2"
+	"github.com/bruli/watersystem-ml/internal/infra/listener"
 	"github.com/bruli/watersystem-ml/internal/infra/memory"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
@@ -77,7 +79,7 @@ func run() error {
 	humidityRepo := memory.NewHumidityReferenceRepository(conf.BonsaiBigV100, conf.BonsaiBigV40, conf.BonsaiSmallV100, conf.BonsaiSmallV40)
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
-	// executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
+	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
 	calculateSvc := ml.NewCalculate(predictionRepo, soilMeasureRepo, humidityRepo, executionRepo, waterSystemExecutor, tracer, func() time.Time {
 		loc, err := time.LoadLocation("Europe/Madrid")
 		if err != nil {
@@ -85,13 +87,21 @@ func run() error {
 		}
 		return time.Now().In(loc)
 	})
-	eventBus := event.NewBus()
-
 	logChMiddleware := cqs.NewCommandHndErrorMiddleware(log, tracer)
+
+	commandBus := cqs.NewCommandBus()
+	commandBus.Subscribe(app.ExecuteWateringCommandName, logChMiddleware(app.NewExecuteWatering(executeSvc)))
+	execWatOnWaterSysList := listener.NewExecuteWateringOnWatersystemWateringRequested(commandBus)
+
+	eventBus := event.NewBus()
+	eventBus.Subscribe(ml.WateringRequestedEventName, execWatOnWaterSysList)
+
 	listenerMdw := cqs.NewCommandHandlerEventBusMiddleware(new(eventBus), tracer)
 	multiCHMdw := cqs.CommandHandlerMultiMiddleware(logChMiddleware, listenerMdw)
 
 	calculateWatCh := multiCHMdw(app.NewCalculateWatering(calculateSvc))
+
+	commandBus.Subscribe(app.CalculateWateringEventName, calculateWatCh)
 
 	cronJob, err := buildCron()
 	if err != nil {
@@ -109,7 +119,7 @@ func run() error {
 			ch <- err
 		}
 	}(errCh)
-	go runCalculateWatering(ctx, log, calculateWatCh)
+	go runCalculateWatering(ctx, commandBus)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -195,7 +205,7 @@ func checkDir(path string) (exists, empty bool, err error) {
 	return true, true, nil
 }
 
-func runCalculateWatering(ctx context.Context, log *slog.Logger, ch cqs.CommandHandler) {
+func runCalculateWatering(ctx context.Context, ch cqs.CommandHandler) {
 	tick := time.NewTicker(15 * time.Minute)
 	defer tick.Stop()
 
