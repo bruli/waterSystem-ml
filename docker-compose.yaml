@@ -36,6 +36,7 @@ services:
       - influxdb
       - lgtm
       - mockserver
+      - postgres
     command: ["air", "-c", ".air.toml"]
 
   influxdb:
@@ -69,9 +70,22 @@ services:
         - ./mockserver/expectations.json:/config/expectations.json
       environment:
         MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
+  postgres:
+      image: postgres:18
+      container_name: postgres
+      restart: unless-stopped
+      environment:
+        POSTGRES_USER: admin
+        POSTGRES_PASSWORD: adminpassword
+        POSTGRES_DB: postgres
+      ports:
+        - "5432:5432"
+      volumes:
+        - postgres-data:/var/lib/postgresql/data
 
 volumes:
   influxdb2_data:
   influxdb2_config:
   go-mod-cache:
   go-build-cache:
+  postgres-data:

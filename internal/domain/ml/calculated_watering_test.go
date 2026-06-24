@@ -29,11 +29,10 @@ func TestNewCalculatedPrediction(t *testing.T) {
 	humidityChecker := ml.NewHumidityReference(humidity40, humidity100)
 
 	type args struct {
-		isRaining         bool
-		systemDeactivated bool
-		timeFunc          func() time.Time
-		exec              ml.Executions
-		zonesHumidity     []*ml.ZoneHumidity
+		isRaining       bool
+		systemActivated bool
+		exec            ml.Executions
+		zonesHumidity   []*ml.ZoneHumidity
 	}
 	tests := []struct {
 		name               string
@@ -63,53 +62,8 @@ func TestNewCalculatedPrediction(t *testing.T) {
 			},
 		},
 		{
-			name: "with a low humidity in both zones but is night hour, then it returns a watering system skipped events",
-			args: args{
-				timeFunc: func() time.Time {
-					return time.Date(2021, 1, 1, 23, 0, 0, 0, time.UTC)
-				},
-				zonesHumidity: []*ml.ZoneHumidity{
-					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
-					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
-				},
-			},
-			expectedEventsLen:  2,
-			expectedCalculated: true,
-			expectedEvents: []event.Event{
-				&ml.WateringSystemSkippedEvent{},
-				&ml.WateringSystemSkippedEvent{},
-			},
-			expectedReasons: []string{
-				ml.IsNightRangeReason,
-				ml.IsNightRangeReason,
-			},
-		},
-		{
-			name: "with a low humidity in one zone but is night hour, then it returns a watering system skipped and watering zone skipped event",
-			args: args{
-				timeFunc: func() time.Time {
-					return time.Date(2021, 1, 1, 23, 0, 0, 0, time.UTC)
-				},
-				zonesHumidity: []*ml.ZoneHumidity{
-					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
-					ml.NewZoneHumidity(bonsaiSmallZone, highHumidity, humidityChecker),
-				},
-			},
-			expectedEventsLen:  2,
-			expectedCalculated: true,
-			expectedEvents: []event.Event{
-				&ml.WateringSystemSkippedEvent{},
-				&ml.WateringZoneSkippedEvent{},
-			},
-			expectedReasons: []string{
-				ml.IsNightRangeReason,
-				ml.AboveMaxThresholdReason,
-			},
-		},
-		{
 			name: "with a low humidity in alls zones but is raining, then it returns watering system skipped events",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
@@ -130,7 +84,6 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a low humidity in one zone but is raining, then it returns a watering zone skipped and watering system skipped events",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, highHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
@@ -151,12 +104,11 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a low humidity in alls zones but system is deactivated, then it returns watering system skipped events",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
 				},
-				systemDeactivated: true,
+				systemActivated: false,
 			},
 			expectedEventsLen:  2,
 			expectedCalculated: true,
@@ -172,11 +124,11 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a low humidity in alls zones but with wrong zone declared in executions, then it returns error",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
 				},
+				systemActivated: true,
 				exec: map[string]ml.Execution{
 					"wrong": ptr.FromPointer(ml.NewExecution("wrong", time.Now())),
 				},
@@ -185,11 +137,11 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a low humidity in alls zones but recent executed in all zones, then it returns watering zone skipped events",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
 				},
+				systemActivated: true,
 				exec: map[string]ml.Execution{
 					bonsaiBigZone:   ptr.FromPointer(ml.NewExecution(bonsaiBigZone, time.Now().Add(-1*time.Hour))),
 					bonsaiSmallZone: ptr.FromPointer(ml.NewExecution(bonsaiSmallZone, time.Now().Add(-1*time.Hour))),
@@ -209,11 +161,11 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a low humidity in alls zones but recent executed in one zone, then it returns watering system zone skipped and watering requested events",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, lowHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, lowHumidity, humidityChecker),
 				},
+				systemActivated: true,
 				exec: map[string]ml.Execution{
 					bonsaiBigZone:   ptr.FromPointer(ml.NewExecution(bonsaiBigZone, time.Now().Add(-1*time.Hour))),
 					bonsaiSmallZone: ptr.FromPointer(ml.NewExecution(bonsaiSmallZone, time.Now().Add(-5*time.Hour))),
@@ -233,7 +185,6 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		{
 			name: "with a medium humidity in alls zones, then it returns nil events and calculated false",
 			args: args{
-				timeFunc: dayTimeFunc,
 				zonesHumidity: []*ml.ZoneHumidity{
 					ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, humidityChecker),
 					ml.NewZoneHumidity(bonsaiSmallZone, mediumHumidity, humidityChecker),
@@ -250,7 +201,9 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		t.Run(`Given a CalculatedPrediction struct,
 		when the constructor is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := ml.NewCalculatedWatering(tt.args.isRaining, tt.args.systemDeactivated, tt.args.timeFunc, tt.args.exec, tt.args.zonesHumidity)
+			got, err := ml.NewCalculatedWatering(tt.args.isRaining, tt.args.systemActivated, func() time.Time {
+				return time.Now()
+			}, tt.args.exec, tt.args.zonesHumidity)
 			if err != nil {
 				require.ErrorIs(t, err, ml.ErrUnknownZone)
 				return
@@ -280,8 +233,9 @@ func TestNewCalculatedPrediction(t *testing.T) {
 
 func TestCalculatedWatering_FromPrediction(t *testing.T) {
 	type args struct {
-		pred *ml.Prediction
-		zh   *ml.ZoneHumidity
+		pred     *ml.Prediction
+		zh       *ml.ZoneHumidity
+		timeFunc func() time.Time
 	}
 	tests := []struct {
 		name           string
@@ -290,10 +244,23 @@ func TestCalculatedWatering_FromPrediction(t *testing.T) {
 		expectedReason string
 	}{
 		{
-			name: "and predictions say to watering, then it returns watering requested event",
+			name: "when is night, then it returns watering zone skipped event",
 			args: args{
 				pred: ml.NewPrediction(uuid.New(), bonsaiBigZone, true, 10, "reason test", 0.5),
 				zh:   ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
+				timeFunc: func() time.Time {
+					return time.Date(2021, 1, 1, 23, 0, 0, 0, time.UTC)
+				},
+			},
+			expectedEvents: &ml.WateringSystemSkippedEvent{},
+			expectedReason: ml.IsNightRangeReason,
+		},
+		{
+			name: "and predictions say to watering, then it returns watering requested event",
+			args: args{
+				pred:     ml.NewPrediction(uuid.New(), bonsaiBigZone, true, 10, "reason test", 0.5),
+				zh:       ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
+				timeFunc: dayTimeFunc,
 			},
 			expectedEvents: &ml.WateringRequestedEvent{},
 			expectedReason: ml.ModelPredictionReason,
@@ -301,8 +268,9 @@ func TestCalculatedWatering_FromPrediction(t *testing.T) {
 		{
 			name: "and predictions say no watering, then it returns watering requested event",
 			args: args{
-				pred: ml.NewPrediction(uuid.New(), bonsaiBigZone, false, 0, "reason test", 0.5),
-				zh:   ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
+				pred:     ml.NewPrediction(uuid.New(), bonsaiBigZone, false, 0, "reason test", 0.5),
+				zh:       ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
+				timeFunc: dayTimeFunc,
 			},
 			expectedEvents: &ml.WateringZoneSkippedEvent{},
 			expectedReason: ml.ModelNotEstimatedReason,
@@ -312,7 +280,7 @@ func TestCalculatedWatering_FromPrediction(t *testing.T) {
 		t.Run(`Given a built CalculateWatering struct, without events,
 		when FromPrediction method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			c, err := ml.NewCalculatedWatering(false, false, dayTimeFunc, map[string]ml.Execution{}, []*ml.ZoneHumidity{
+			c, err := ml.NewCalculatedWatering(false, false, tt.args.timeFunc, map[string]ml.Execution{}, []*ml.ZoneHumidity{
 				ml.NewZoneHumidity(bonsaiBigZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
 				ml.NewZoneHumidity(bonsaiSmallZone, mediumHumidity, ml.NewHumidityReference(humidity40, humidity100)),
 			})
@@ -329,6 +297,8 @@ func TestCalculatedWatering_FromPrediction(t *testing.T) {
 				reas = events[0].(*ml.WateringRequestedEvent).Reason
 			case *ml.WateringZoneSkippedEvent:
 				reas = events[0].(*ml.WateringZoneSkippedEvent).Reason
+			case *ml.WateringSystemSkippedEvent:
+				reas = events[0].(*ml.WateringSystemSkippedEvent).Reason
 			}
 			require.Equal(t, tt.expectedReason, reas)
 		})

@@ -7,10 +7,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type Executor interface {
-	Execute(ctx context.Context, w *Watering) error
-}
-
 type Execute struct {
 	exec   Executor
 	tracer trace.Tracer

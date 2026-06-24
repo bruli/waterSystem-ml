@@ -277,3 +277,69 @@ func (mock *HumidityReferenceRepositoryMock) GetByZoneCalls() []struct {
 	mock.lockGetByZone.RUnlock()
 	return calls
 }
+
+// Ensure, that StatusRepositoryMock does implement StatusRepository.
+// If this is not the case, regenerate this file with moq.
+var _ StatusRepository = &StatusRepositoryMock{}
+
+// StatusRepositoryMock is a mock implementation of StatusRepository.
+//
+//	func TestSomethingThatUsesStatusRepository(t *testing.T) {
+//
+//		// make and configure a mocked StatusRepository
+//		mockedStatusRepository := &StatusRepositoryMock{
+//			GetStatusFunc: func(ctx context.Context) (*Status, error) {
+//				panic("mock out the GetStatus method")
+//			},
+//		}
+//
+//		// use mockedStatusRepository in code that requires StatusRepository
+//		// and then make assertions.
+//
+//	}
+type StatusRepositoryMock struct {
+	// GetStatusFunc mocks the GetStatus method.
+	GetStatusFunc func(ctx context.Context) (*Status, error)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// GetStatus holds details about calls to the GetStatus method.
+		GetStatus []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+	}
+	lockGetStatus sync.RWMutex
+}
+
+// GetStatus calls GetStatusFunc.
+func (mock *StatusRepositoryMock) GetStatus(ctx context.Context) (*Status, error) {
+	if mock.GetStatusFunc == nil {
+		panic("StatusRepositoryMock.GetStatusFunc: method is nil but StatusRepository.GetStatus was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockGetStatus.Lock()
+	mock.calls.GetStatus = append(mock.calls.GetStatus, callInfo)
+	mock.lockGetStatus.Unlock()
+	return mock.GetStatusFunc(ctx)
+}
+
+// GetStatusCalls gets all the calls that were made to GetStatus.
+// Check the length with:
+//
+//	len(mockedStatusRepository.GetStatusCalls())
+func (mock *StatusRepositoryMock) GetStatusCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockGetStatus.RLock()
+	calls = mock.calls.GetStatus
+	mock.lockGetStatus.RUnlock()
+	return calls
+}

@@ -1,4 +1,4 @@
-package watering
+package ml
 
 import "context"
 
@@ -19,9 +19,6 @@ func NewStatus(active, raining bool) *Status {
 	return &Status{active: active, raining: raining}
 }
 
-type StatusRepository interface {
-	GetStatus(ctx context.Context) (*Status, error)
-}
 type SystemStatus struct {
 	repository StatusRepository
 }
