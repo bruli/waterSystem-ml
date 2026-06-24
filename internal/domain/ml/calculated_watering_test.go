@@ -201,9 +201,7 @@ func TestNewCalculatedPrediction(t *testing.T) {
 		t.Run(`Given a CalculatedPrediction struct,
 		when the constructor is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := ml.NewCalculatedWatering(tt.args.isRaining, tt.args.systemActivated, func() time.Time {
-				return time.Now()
-			}, tt.args.exec, tt.args.zonesHumidity)
+			got, err := ml.NewCalculatedWatering(tt.args.isRaining, tt.args.systemActivated, time.Now, tt.args.exec, tt.args.zonesHumidity)
 			if err != nil {
 				require.ErrorIs(t, err, ml.ErrUnknownZone)
 				return
@@ -216,13 +214,13 @@ func TestNewCalculatedPrediction(t *testing.T) {
 					require.IsType(t, tt.expectedEvents[i], ev)
 					expected := tt.expectedReasons[i]
 					var reas string
-					switch ev.(type) {
+					switch e := ev.(type) {
 					case *ml.WateringZoneSkippedEvent:
-						reas = ev.(*ml.WateringZoneSkippedEvent).Reason
+						reas = e.Reason
 					case *ml.WateringSystemSkippedEvent:
-						reas = ev.(*ml.WateringSystemSkippedEvent).Reason
+						reas = e.Reason
 					case *ml.WateringRequestedEvent:
-						reas = ev.(*ml.WateringRequestedEvent).Reason
+						reas = e.Reason
 					}
 					require.Equal(t, expected, reas)
 				}
@@ -292,13 +290,13 @@ func TestCalculatedWatering_FromPrediction(t *testing.T) {
 			require.Len(t, events, 1)
 			require.IsType(t, tt.expectedEvents, events[0])
 			var reas string
-			switch events[0].(type) {
+			switch e := events[0].(type) {
 			case *ml.WateringRequestedEvent:
-				reas = events[0].(*ml.WateringRequestedEvent).Reason
+				reas = e.Reason
 			case *ml.WateringZoneSkippedEvent:
-				reas = events[0].(*ml.WateringZoneSkippedEvent).Reason
+				reas = e.Reason
 			case *ml.WateringSystemSkippedEvent:
-				reas = events[0].(*ml.WateringSystemSkippedEvent).Reason
+				reas = e.Reason
 			}
 			require.Equal(t, tt.expectedReason, reas)
 		})

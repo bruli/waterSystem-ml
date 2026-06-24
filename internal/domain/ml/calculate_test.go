@@ -120,27 +120,27 @@ func TestCalculate_Do(t *testing.T) {
 		when Do method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			predictionRepo := &ml.PredictionRepositoryMock{
-				GetFunc: func(ctx context.Context) ([]ml.Prediction, error) {
+				GetFunc: func(_ context.Context) ([]ml.Prediction, error) {
 					return tt.prediction, tt.predictErr
 				},
 			}
 			measureRepo := &ml.SoilMeasureRepositoryMock{
-				GetFunc: func(ctx context.Context) ([]ml.SoilMeasure, error) {
+				GetFunc: func(_ context.Context) ([]ml.SoilMeasure, error) {
 					return tt.measures, tt.soilMeasureErr
 				},
 			}
 			humRefRepo := &ml.HumidityReferenceRepositoryMock{
-				GetByZoneFunc: func(ctx context.Context, zone string) (*ml.HumidityReference, error) {
+				GetByZoneFunc: func(_ context.Context, _ string) (*ml.HumidityReference, error) {
 					return tt.humRef, tt.humidityRefErr
 				},
 			}
 			execRepo := &ml.ExecutionRepositoryMock{
-				GetLastExecutionFunc: func(ctx context.Context) (ml.Executions, error) {
+				GetLastExecutionFunc: func(_ context.Context) (ml.Executions, error) {
 					return tt.executions, tt.executionsErr
 				},
 			}
 			statusRepo := &ml.StatusRepositoryMock{
-				GetStatusFunc: func(ctx context.Context) (*ml.Status, error) {
+				GetStatusFunc: func(_ context.Context) (*ml.Status, error) {
 					return tt.status, tt.statusErr
 				},
 			}

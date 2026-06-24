@@ -18,7 +18,7 @@ type Calculate struct {
 	timeFunc        func() time.Time
 }
 
-func (c Calculate) Do(ctx context.Context) (*CalculatedWatering, error) {
+func (c *Calculate) Do(ctx context.Context) (*CalculatedWatering, error) {
 	ctx, span := c.tracer.Start(ctx, "Calculate.Do")
 	defer span.End()
 	st, err := c.statusRepo.GetStatus(ctx)

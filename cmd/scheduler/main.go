@@ -20,6 +20,7 @@ import (
 	"github.com/bruli/watersystem-ml/internal/infra/influxdb2"
 	"github.com/bruli/watersystem-ml/internal/infra/listener"
 	"github.com/bruli/watersystem-ml/internal/infra/memory"
+	"github.com/bruli/watersystem-ml/internal/infra/ntfy"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
 	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
@@ -64,11 +65,11 @@ func run() error {
 	duration := 30 * time.Minute
 	trainExecutor := python.NewTrainingExecutor(duration, conf.PythonPath, tracer, log)
 	predictionRepo := python.NewPredictionRepository(tracer, conf.PythonPath, duration)
-	//ntfyPublisher, err := ntfy.NewPublisher(conf.NtfyUser, conf.NtfyPassword, conf.NtfyURL, conf.NtfyTopic, tracer)
-	//if err != nil {
-	//	log.ErrorContext(ctx, "Error creating ntfy publisher", "err", err)
-	//	return err
-	//}
+	ntfyPublisher, err := ntfy.NewPublisher(conf.NtfyUser, conf.NtfyPassword, conf.NtfyURL, conf.NtfyTopic, tracer)
+	if err != nil {
+		log.ErrorContext(ctx, "Error creating ntfy publisher", "err", err)
+		return err
+	}
 	soilMeasureRepo := influxdb2.NewSoilMeasureRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
 	waterSystemExecutor, err := watersystem.NewExecutor(ctx, 5*time.Second, tracer, conf.WaterSystemHost, conf.WaterSystemPort, conf.WaterSystemToken, log)
 	if err != nil {
@@ -91,17 +92,18 @@ func run() error {
 
 	commandBus := cqs.NewCommandBus()
 	commandBus.Subscribe(app.ExecuteWateringCommandName, logChMiddleware(app.NewExecuteWatering(executeSvc)))
-	execWatOnWaterSysList := listener.NewExecuteWateringOnWatersystemWateringRequested(commandBus)
+	execWatOnWaterSysList := listener.NewExecuteWateringOnWateringRequested(commandBus)
+	publishMsgList := listener.NewPublishMessageOnWateringRequested(commandBus)
 
 	eventBus := event.NewBus()
-	eventBus.Subscribe(ml.WateringRequestedEventName, execWatOnWaterSysList)
+	eventBus.Subscribe(ml.WateringRequestedEventName, publishMsgList, execWatOnWaterSysList)
 
 	listenerMdw := cqs.NewCommandHandlerEventBusMiddleware(new(eventBus), tracer)
 	multiCHMdw := cqs.CommandHandlerMultiMiddleware(logChMiddleware, listenerMdw)
 
-	calculateWatCh := multiCHMdw(app.NewCalculateWatering(calculateSvc))
-
-	commandBus.Subscribe(app.CalculateWateringEventName, calculateWatCh)
+	commandBus.Subscribe(app.CalculateWateringEventName, multiCHMdw(app.NewCalculateWatering(calculateSvc)))
+	commandBus.Subscribe(app.WateringZoneCommandName, logChMiddleware(app.NewWateringZone(executeSvc, tracer)))
+	commandBus.Subscribe(app.PublishMessageCommandName, logChMiddleware(app.NewPublishMessage(ntfyPublisher, tracer)))
 
 	cronJob, err := buildCron()
 	if err != nil {

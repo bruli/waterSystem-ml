@@ -10,11 +10,11 @@ import (
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 )
 
-type ExecuteWateringOnWatersystemWateringRequested struct {
+type ExecuteWateringOnWateringRequested struct {
 	ch cqs.CommandHandler
 }
 
-func (e ExecuteWateringOnWatersystemWateringRequested) Listen(ctx context.Context, ev event.Event) error {
+func (e ExecuteWateringOnWateringRequested) Listen(ctx context.Context, ev event.Event) error {
 	swr, ok := ev.(*ml.WateringRequestedEvent)
 	if !ok {
 		return fmt.Errorf("invalid event type: %T", ev)
@@ -28,6 +28,6 @@ func (e ExecuteWateringOnWatersystemWateringRequested) Listen(ctx context.Contex
 	return nil
 }
 
-func NewExecuteWateringOnWatersystemWateringRequested(ch cqs.CommandHandler) *ExecuteWateringOnWatersystemWateringRequested {
-	return &ExecuteWateringOnWatersystemWateringRequested{ch: ch}
+func NewExecuteWateringOnWateringRequested(ch cqs.CommandHandler) *ExecuteWateringOnWateringRequested {
+	return &ExecuteWateringOnWateringRequested{ch: ch}
 }
