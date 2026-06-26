@@ -1,4 +1,4 @@
-CREATE TABLE model_predictions
+CREATE TABLE if not exists model_predictions
 (
     id                UUID PRIMARY KEY,
     created_at        TIMESTAMPTZ      NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE model_predictions
     moisture_before   DOUBLE PRECISION NOT NULL,
     watering_executed BOOLEAN          NOT NULL,
     validation_at     TIMESTAMPTZ,
-    validation_status TEXT NOT NULL DEFAULT,
+    validation_status TEXT NOT NULL,
     moisture_after    DOUBLE PRECISION,
     target_moisture   DOUBLE PRECISION NOT NULL,
     reached_target    BOOLEAN

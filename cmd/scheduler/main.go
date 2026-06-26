@@ -24,6 +24,11 @@ import (
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
 	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -45,6 +50,18 @@ func run() error {
 		return err
 	}
 	log := buildLog(conf.LogLevel)
+
+	db, err := sqlx.Connect("postgres", conf.PostgresDataSource())
+	if err != nil {
+		log.ErrorContext(ctx, "Error connecting to database", "err", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	if err := runPostgresMigrations(db); err != nil {
+		log.ErrorContext(ctx, "Error running postgres migrations", "err", err)
+		return err
+	}
 
 	tracingProv, err := tracing.InitTracing(ctx, serviceName)
 	if err != nil {
@@ -157,6 +174,26 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func runPostgresMigrations(db *sqlx.DB) error {
+	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://internal/infra/postgres/migrations",
+		"postgres",
+		driver,
+	)
+	if err != nil {
+		return err
+	}
+	err = m.Up()
+	if errors.Is(err, migrate.ErrNoChange) {
+		return nil
+	}
+	return err
 }
 
 func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, svc *ml.Train) {

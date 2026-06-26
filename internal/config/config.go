@@ -1,6 +1,10 @@
 package config
 
-import "github.com/caarlos0/env/v11"
+import (
+	"fmt"
+
+	"github.com/caarlos0/env/v11"
+)
 
 type Config struct {
 	ServerHost       string  `env:"SERVER_HOST,required"`
@@ -23,6 +27,11 @@ type Config struct {
 	BonsaiBigV40     float64 `env:"BONSAI_BIG_V40,required"`
 	BonsaiSmallV100  float64 `env:"BONSAI_SMALL_V100,required"`
 	BonsaiSmallV40   float64 `env:"BONSAI_SMALL_V40,required"`
+	PostgresDatabase string  `env:"POSTGRES_DATABASE,required"`
+	PostgresHost     string  `env:"POSTGRES_HOST,required"`
+	PostgresPort     string  `env:"POSTGRES_PORT,required"`
+	PostgresUser     string  `env:"POSTGRES_USER,required"`
+	PostgresPassword string  `env:"POSTGRES_PASSWORD,required"`
 }
 
 func New() (*Config, error) {
@@ -35,4 +44,8 @@ func New() (*Config, error) {
 
 func (c *Config) IsProd() bool {
 	return c.Env == "PROD"
+}
+
+func (c *Config) PostgresDataSource() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", c.PostgresUser, c.PostgresPassword, c.PostgresHost, c.PostgresPort, c.PostgresDatabase)
 }
