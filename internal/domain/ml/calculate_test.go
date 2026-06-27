@@ -16,6 +16,7 @@ import (
 
 func TestCalculate_Do(t *testing.T) {
 	errTest := errors.New("error")
+
 	defaultStatus := ml.NewStatus(true, false)
 	defaultExecutions := ml.Executions{
 		bonsaiBigZone:   ptr.FromPointer(ml.NewExecution(bonsaiBigZone, time.Now().Add(-5*time.Hour))),
@@ -25,16 +26,28 @@ func TestCalculate_Do(t *testing.T) {
 		ptr.FromPointer(ml.NewSoilMeasure(bonsaiBigZone, mediumHumidity)),
 		ptr.FromPointer(ml.NewSoilMeasure(bonsaiSmallZone, mediumHumidity)),
 	}
+	defaultHumidityRef := ml.NewHumidityReference(humidity40, humidity100)
+
 	tests := []struct {
 		name string
-		expectedErr, statusErr,
-		executionsErr, soilMeasureErr,
-		humidityRefErr, predictErr error
-		status     *ml.Status
-		executions ml.Executions
-		measures   []ml.SoilMeasure
-		humRef     *ml.HumidityReference
-		prediction []ml.Prediction
+
+		expectedErr error
+
+		statusErr        error
+		executionsErr    error
+		soilMeasureErr   error
+		predictionLogErr error
+		humidityRefErr   error
+		predictErr       error
+
+		status                *ml.Status
+		executions            ml.Executions
+		measures              []ml.SoilMeasure
+		humRef                *ml.HumidityReference
+		pendingValidationZone map[string]bool
+		prediction            []ml.Prediction
+		wantEvents            int
+		wantPredict           bool
 	}{
 		{
 			name:        "and status repository returns error, then it returns same error",
@@ -55,6 +68,14 @@ func TestCalculate_Do(t *testing.T) {
 			soilMeasureErr: errTest,
 		},
 		{
+			name:             "and prediction log repository returns error, then it returns same error",
+			expectedErr:      errTest,
+			status:           defaultStatus,
+			executions:       defaultExecutions,
+			measures:         defaultMeasures,
+			predictionLogErr: errTest,
+		},
+		{
 			name:           "and humidity reference repository returns error, then it returns same error",
 			expectedErr:    errTest,
 			status:         defaultStatus,
@@ -67,60 +88,93 @@ func TestCalculate_Do(t *testing.T) {
 			expectedErr: ml.ErrUnknownZone,
 			status:      defaultStatus,
 			executions: ml.Executions{
-				"wrong": ptr.FromPointer(ml.NewExecution(bonsaiBigZone, time.Now())),
+				"wrong": ptr.FromPointer(ml.NewExecution("wrong", time.Now().Add(-5*time.Hour))),
 			},
 			measures: []ml.SoilMeasure{
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiBigZone, lowHumidity)),
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiSmallZone, lowHumidity)),
 			},
-			humRef: ml.NewHumidityReference(humidity40, humidity100),
+			humRef: defaultHumidityRef,
 		},
 		{
-			name:        "and getting prediction returns an returns error, then it returns same error",
+			name:        "and prediction repository returns error for medium humidity zones, then it returns same error",
 			expectedErr: errTest,
 			predictErr:  errTest,
 			status:      defaultStatus,
 			executions:  defaultExecutions,
 			measures:    defaultMeasures,
-			humRef:      ml.NewHumidityReference(humidity40, humidity100),
+			humRef:      defaultHumidityRef,
+			wantPredict: true,
 		},
 		{
-			name:        "and getting prediction returns an returns error, then it returns same error",
-			expectedErr: errTest,
-			predictErr:  errTest,
-			status:      defaultStatus,
-			executions:  defaultExecutions,
-			measures:    defaultMeasures,
-			humRef:      ml.NewHumidityReference(humidity40, humidity100),
-		},
-		{
-			name:       "and getting prediction returns an returns predictions, then it returns a calculated object",
+			name:       "and prediction repository returns predictions for medium humidity zones, then it returns a calculated object",
 			status:     defaultStatus,
 			executions: defaultExecutions,
 			measures:   defaultMeasures,
-			humRef:     ml.NewHumidityReference(humidity40, humidity100),
+			humRef:     defaultHumidityRef,
 			prediction: []ml.Prediction{
 				ptr.FromPointer(ml.NewPrediction(uuid.New(), bonsaiBigZone, false, 0, "no needed", 0)),
 				ptr.FromPointer(ml.NewPrediction(uuid.New(), bonsaiSmallZone, false, 0, "no needed", 0)),
 			},
+			wantEvents:  2,
+			wantPredict: true,
 		},
 		{
-			name:       "and calculate watering returns an returns calculated, then it returns a calculated object",
+			name:       "and one zone has pending validation, then only the other medium zone asks prediction",
+			status:     defaultStatus,
+			executions: defaultExecutions,
+			measures:   defaultMeasures,
+			humRef:     defaultHumidityRef,
+			pendingValidationZone: map[string]bool{
+				bonsaiBigZone: true,
+			},
+			prediction: []ml.Prediction{
+				ptr.FromPointer(ml.NewPrediction(uuid.New(), bonsaiSmallZone, false, 0, "no needed", 0)),
+			},
+			wantEvents:  2,
+			wantPredict: true,
+		},
+		{
+			name:       "and all medium zones have pending validation, then it returns without asking predictions",
+			status:     defaultStatus,
+			executions: defaultExecutions,
+			measures:   defaultMeasures,
+			humRef:     defaultHumidityRef,
+			pendingValidationZone: map[string]bool{
+				bonsaiBigZone:   true,
+				bonsaiSmallZone: true,
+			},
+			wantEvents: 2,
+		},
+		{
+			name:       "and calculated watering is already resolved by low humidity, then it returns without asking predictions",
 			status:     defaultStatus,
 			executions: defaultExecutions,
 			measures: []ml.SoilMeasure{
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiBigZone, lowHumidity)),
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiSmallZone, lowHumidity)),
 			},
-			humRef: ml.NewHumidityReference(humidity40, humidity100),
+			humRef:     defaultHumidityRef,
+			wantEvents: 2,
+		},
+		{
+			name:       "and system is blocked by raining, then it returns without asking predictions",
+			status:     ml.NewStatus(true, true),
+			executions: defaultExecutions,
+			measures:   defaultMeasures,
+			humRef:     defaultHumidityRef,
+			wantEvents: 1,
 		},
 	}
+
 	for _, tt := range tests {
-		t.Run(`Given a Calculate service,
-		when Do method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a Calculate service, when Do method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			predictionCalled := false
 			predictionRepo := &ml.PredictionRepositoryMock{
 				GetFunc: func(_ context.Context) ([]ml.Prediction, error) {
+					predictionCalled = true
 					return tt.prediction, tt.predictErr
 				},
 			}
@@ -134,6 +188,11 @@ func TestCalculate_Do(t *testing.T) {
 					return tt.humRef, tt.humidityRefErr
 				},
 			}
+			predictionLogRepo := &ml.PredictionLogRepositoryMock{
+				GetPendingValidationZonesFunc: func(_ context.Context) (map[string]bool, error) {
+					return tt.pendingValidationZone, tt.predictionLogErr
+				},
+			}
 			execRepo := &ml.ExecutionRepositoryMock{
 				GetLastExecutionFunc: func(_ context.Context) (ml.Executions, error) {
 					return tt.executions, tt.executionsErr
@@ -144,14 +203,28 @@ func TestCalculate_Do(t *testing.T) {
 					return tt.status, tt.statusErr
 				},
 			}
-			svc := ml.NewCalculate(predictionRepo, measureRepo, humRefRepo, execRepo, statusRepo, buildTracer(), dayTimeFunc)
-			cp, err := svc.Do(t.Context())
-			if err != nil {
-				require.Equal(t, tt.expectedErr, err)
+
+			svc := ml.NewCalculate(
+				predictionRepo,
+				measureRepo,
+				humRefRepo,
+				execRepo,
+				predictionLogRepo,
+				statusRepo,
+				buildTracer(),
+				dayTimeFunc,
+			)
+			cw, err := svc.Do(t.Context())
+
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			require.NotNil(t, cp)
-			require.NotNil(t, cp.Events())
+
+			require.NoError(t, err)
+			require.NotNil(t, cw)
+			require.Equal(t, tt.wantPredict, predictionCalled)
+			require.Len(t, cw.Events(), tt.wantEvents)
 		})
 	}
 }

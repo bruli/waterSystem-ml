@@ -63,20 +63,28 @@ func (p PredictionLogRepository) GetPendingByZone(ctx context.Context, zone stri
 	return &pl, nil
 }
 
-func (p PredictionLogRepository) IsPendingValidationByZone(ctx context.Context, zone string) (bool, error) {
+func (p PredictionLogRepository) GetPendingValidationZones(ctx context.Context) (map[string]bool, error) {
 	ctx, span := p.tracer.Start(ctx, "PredictionLogRepository.IsPendingValidationByZone")
 	defer span.End()
-	exists, err := p.db.NewSelect().
-		Model(&modelPrediction{}).
-		Where("zone = ?", zone).
+	var predictions []modelPrediction
+
+	err := p.db.NewSelect().
+		Model(&predictions).
+		Column("zone").
 		Where("validation_at IS NULL").
-		Exists(ctx)
+		Scan(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		return false, err
+		return nil, err
 	}
-	return exists, nil
+
+	result := make(map[string]bool, len(predictions))
+	for i := range predictions {
+		result[predictions[i].Zone] = true
+	}
+
+	return result, nil
 }
 
 func (p PredictionLogRepository) Save(ctx context.Context, pl *ml.PredictionLog) error {

@@ -30,11 +30,11 @@ func TestPredictionLogRepository(t *testing.T) {
 			err = repo.Save(t.Context(), new(fixtures.PredictionLogBuilder{Zone: new(zone)}.Build(t)))
 			require.NoError(t, err)
 		})
-		t.Run(`when IsPendingValidationByZone method is called,
+		t.Run(`when GetPendingValidationZones method is called,
 		then it should return true`, func(t *testing.T) {
-			got, err := repo.IsPendingValidationByZone(t.Context(), zone)
+			got, err := repo.GetPendingValidationZones(t.Context())
 			require.NoError(t, err)
-			require.True(t, got)
+			require.True(t, got[zone])
 		})
 		t.Run(`when GetPendingByZone method is called `, func(t *testing.T) {
 			t.Run(`and does not exists, 

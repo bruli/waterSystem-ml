@@ -358,8 +358,8 @@ var _ PredictionLogRepository = &PredictionLogRepositoryMock{}
 //			GetPendingByZoneFunc: func(ctx context.Context, zone string, limit time.Time) (*PredictionLog, error) {
 //				panic("mock out the GetPendingByZone method")
 //			},
-//			IsPendingValidationByZoneFunc: func(ctx context.Context, zone string) (bool, error) {
-//				panic("mock out the IsPendingValidationByZone method")
+//			GetPendingValidationZonesFunc: func(ctx context.Context) (map[string]bool, error) {
+//				panic("mock out the GetPendingValidationZones method")
 //			},
 //			SaveFunc: func(ctx context.Context, pl *PredictionLog) error {
 //				panic("mock out the Save method")
@@ -374,8 +374,8 @@ type PredictionLogRepositoryMock struct {
 	// GetPendingByZoneFunc mocks the GetPendingByZone method.
 	GetPendingByZoneFunc func(ctx context.Context, zone string, limit time.Time) (*PredictionLog, error)
 
-	// IsPendingValidationByZoneFunc mocks the IsPendingValidationByZone method.
-	IsPendingValidationByZoneFunc func(ctx context.Context, zone string) (bool, error)
+	// GetPendingValidationZonesFunc mocks the GetPendingValidationZones method.
+	GetPendingValidationZonesFunc func(ctx context.Context) (map[string]bool, error)
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, pl *PredictionLog) error
@@ -391,12 +391,10 @@ type PredictionLogRepositoryMock struct {
 			// Limit is the limit argument value.
 			Limit time.Time
 		}
-		// IsPendingValidationByZone holds details about calls to the IsPendingValidationByZone method.
-		IsPendingValidationByZone []struct {
+		// GetPendingValidationZones holds details about calls to the GetPendingValidationZones method.
+		GetPendingValidationZones []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Zone is the zone argument value.
-			Zone string
 		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
@@ -407,7 +405,7 @@ type PredictionLogRepositoryMock struct {
 		}
 	}
 	lockGetPendingByZone          sync.RWMutex
-	lockIsPendingValidationByZone sync.RWMutex
+	lockGetPendingValidationZones sync.RWMutex
 	lockSave                      sync.RWMutex
 }
 
@@ -451,39 +449,35 @@ func (mock *PredictionLogRepositoryMock) GetPendingByZoneCalls() []struct {
 	return calls
 }
 
-// IsPendingValidationByZone calls IsPendingValidationByZoneFunc.
-func (mock *PredictionLogRepositoryMock) IsPendingValidationByZone(ctx context.Context, zone string) (bool, error) {
-	if mock.IsPendingValidationByZoneFunc == nil {
-		panic("PredictionLogRepositoryMock.IsPendingValidationByZoneFunc: method is nil but PredictionLogRepository.IsPendingValidationByZone was just called")
+// GetPendingValidationZones calls GetPendingValidationZonesFunc.
+func (mock *PredictionLogRepositoryMock) GetPendingValidationZones(ctx context.Context) (map[string]bool, error) {
+	if mock.GetPendingValidationZonesFunc == nil {
+		panic("PredictionLogRepositoryMock.GetPendingValidationZonesFunc: method is nil but PredictionLogRepository.GetPendingValidationZones was just called")
 	}
 	callInfo := struct {
-		Ctx  context.Context
-		Zone string
+		Ctx context.Context
 	}{
-		Ctx:  ctx,
-		Zone: zone,
+		Ctx: ctx,
 	}
-	mock.lockIsPendingValidationByZone.Lock()
-	mock.calls.IsPendingValidationByZone = append(mock.calls.IsPendingValidationByZone, callInfo)
-	mock.lockIsPendingValidationByZone.Unlock()
-	return mock.IsPendingValidationByZoneFunc(ctx, zone)
+	mock.lockGetPendingValidationZones.Lock()
+	mock.calls.GetPendingValidationZones = append(mock.calls.GetPendingValidationZones, callInfo)
+	mock.lockGetPendingValidationZones.Unlock()
+	return mock.GetPendingValidationZonesFunc(ctx)
 }
 
-// IsPendingValidationByZoneCalls gets all the calls that were made to IsPendingValidationByZone.
+// GetPendingValidationZonesCalls gets all the calls that were made to GetPendingValidationZones.
 // Check the length with:
 //
-//	len(mockedPredictionLogRepository.IsPendingValidationByZoneCalls())
-func (mock *PredictionLogRepositoryMock) IsPendingValidationByZoneCalls() []struct {
-	Ctx  context.Context
-	Zone string
+//	len(mockedPredictionLogRepository.GetPendingValidationZonesCalls())
+func (mock *PredictionLogRepositoryMock) GetPendingValidationZonesCalls() []struct {
+	Ctx context.Context
 } {
 	var calls []struct {
-		Ctx  context.Context
-		Zone string
+		Ctx context.Context
 	}
-	mock.lockIsPendingValidationByZone.RLock()
-	calls = mock.calls.IsPendingValidationByZone
-	mock.lockIsPendingValidationByZone.RUnlock()
+	mock.lockGetPendingValidationZones.RLock()
+	calls = mock.calls.GetPendingValidationZones
+	mock.lockGetPendingValidationZones.RUnlock()
 	return calls
 }
 

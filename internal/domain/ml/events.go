@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	WateringSystemSkippedEventName = "watering_system_skipped"
-	WateringZoneSkippedEventName   = "watering_zone_skipped"
-	WateringRequestedEventName     = "watering_requested"
+	WateringSystemSkippedEventName    = "watering_system_skipped"
+	WateringZoneSkippedEventName      = "watering_zone_skipped"
+	WateringRequestedEventName        = "watering_requested"
+	PredictionPendingValidationReason = "prediction_pending_validation"
 )
 
 type WateringSystemSkippedEvent struct {

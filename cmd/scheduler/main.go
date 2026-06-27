@@ -108,7 +108,7 @@ func run() error {
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
-	calculateSvc := ml.NewCalculate(predictionRepo, soilMeasureRepo, humidityRepo, executionRepo, waterSystemExecutor, tracer, func() time.Time {
+	calculateSvc := ml.NewCalculate(predictionRepo, soilMeasureRepo, humidityRepo, executionRepo, predictionLogRepo, waterSystemExecutor, tracer, func() time.Time {
 		loc, err := time.LoadLocation("Europe/Madrid")
 		if err != nil {
 			log.ErrorContext(ctx, "Error loading location", "err", err)

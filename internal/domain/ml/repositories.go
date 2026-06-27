@@ -33,5 +33,5 @@ type WateringSkippedLogRepository interface {
 type PredictionLogRepository interface {
 	Save(ctx context.Context, pl *PredictionLog) error
 	GetPendingByZone(ctx context.Context, zone string, limit time.Time) (*PredictionLog, error)
-	IsPendingValidationByZone(ctx context.Context, zone string) (bool, error)
+	GetPendingValidationZones(ctx context.Context) (map[string]bool, error)
 }
