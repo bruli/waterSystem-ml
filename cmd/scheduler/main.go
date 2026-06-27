@@ -28,7 +28,6 @@ import (
 	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
-	"github.com/robfig/cron/v3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"go.opentelemetry.io/otel"
@@ -141,24 +140,12 @@ func run() error {
 	commandBus.Subscribe(app.ValidatePredictionCommandName, logChMiddleware(app.NewValidatePrediction(validatePredictionLogSvc)))
 	commandBus.Subscribe(app.SavePredictionLogCommandName, logChMiddleware(app.NewSavePredictionLog(savePredictionLogSvc)))
 
-	cronJob, err := buildCron()
-	if err != nil {
-		log.ErrorContext(ctx, "Error creating cron", "err", err)
-		return err
-	}
-
 	go runValidatePrediction(ctx, commandBus)
 
 	errCh := make(chan error)
 	defer close(errCh)
 
 	go initialTraining(ctx, conf, log, trainSvc)
-	go func(ch chan error) {
-		if err := trainingCron(ctx, log, cronJob, trainSvc); err != nil {
-			log.ErrorContext(ctx, "Error adding cron job", "err", err)
-			ch <- err
-		}
-	}(errCh)
 	go runCalculateWatering(ctx, commandBus)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
@@ -220,20 +207,21 @@ func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger,
 	executeTraining(ctx, log, svc)
 }
 
-func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.Train) error {
-	defer c.Stop()
-	_, err := c.AddFunc("* 3 * * *", func() {
-		executeTraining(ctx, log, svc)
-	})
-	if err != nil {
-		return err
-	}
-	log.InfoContext(ctx, "Training cron started")
-	c.Start()
-	<-ctx.Done()
-	log.InfoContext(ctx, "Training cron stopped")
-	return nil
-}
+//nolint:gocritic
+//func trainingCron(ctx context.Context, log *slog.Logger, c *cron.Cron, svc *ml.Train) error {
+//	defer c.Stop()
+//	_, err := c.AddFunc("* 3 * * *", func() {
+//		executeTraining(ctx, log, svc)
+//	})
+//	if err != nil {
+//		return err
+//	}
+//	log.InfoContext(ctx, "Training cron started")
+//	c.Start()
+//	<-ctx.Done()
+//	log.InfoContext(ctx, "Training cron stopped")
+//	return nil
+//}
 
 func executeTraining(ctx context.Context, log *slog.Logger, svc *ml.Train) {
 	if err := svc.Run(ctx); err != nil {
@@ -314,13 +302,4 @@ func shutdown(ctx context.Context, srv *http.Server, log *slog.Logger) {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("error shutting down server", "err", err)
 	}
-}
-
-func buildCron() (*cron.Cron, error) {
-	loc, err := time.LoadLocation("Europe/Madrid")
-	if err != nil {
-		return nil, err
-	}
-	c := cron.New(cron.WithLocation(loc))
-	return c, nil
 }
