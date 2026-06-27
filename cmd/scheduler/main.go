@@ -114,7 +114,7 @@ func run() error {
 		return time.Now().In(loc)
 	})
 	saveWaterSkipLogSvc := ml.NewSaveWateringSkippedLog(waterSkippedLogRepo)
-	validatePredictionLogSvc := ml.NewSavePredictionLog(predictionLogRepo)
+	validatePredictionLogSvc := ml.NewValidatePrediction(soilMeasureRepo, predictionLogRepo, tracer)
 	savePredictionLogSvc := ml.NewSavePredictionLog(predictionLogRepo)
 
 	logChMiddleware := cqs.NewCommandHndErrorMiddleware(log, tracer)
@@ -138,7 +138,7 @@ func run() error {
 	commandBus.Subscribe(app.WateringZoneCommandName, logChMiddleware(app.NewWateringZone(executeSvc, tracer)))
 	commandBus.Subscribe(app.PublishMessageCommandName, logChMiddleware(app.NewPublishMessage(ntfyPublisher, tracer)))
 	commandBus.Subscribe(app.SaveWateringSkippedLogCommandName, logChMiddleware(app.NewSaveWateringSkippedLog(saveWaterSkipLogSvc, tracer)))
-	commandBus.Subscribe(app.ValidatePredictionCommandName, logChMiddleware(app.NewSavePredictionLog(validatePredictionLogSvc)))
+	commandBus.Subscribe(app.ValidatePredictionCommandName, logChMiddleware(app.NewValidatePrediction(validatePredictionLogSvc)))
 	commandBus.Subscribe(app.SavePredictionLogCommandName, logChMiddleware(app.NewSavePredictionLog(savePredictionLogSvc)))
 
 	cronJob, err := buildCron()
@@ -146,6 +146,8 @@ func run() error {
 		log.ErrorContext(ctx, "Error creating cron", "err", err)
 		return err
 	}
+
+	go runValidatePrediction(ctx, commandBus)
 
 	errCh := make(chan error)
 	defer close(errCh)
@@ -185,6 +187,21 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func runValidatePrediction(ctx context.Context, bus cqs.CommandBus) {
+	tick := time.NewTicker(15 * time.Minute)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			_, _ = bus.Handle(ctx, app.ValidatePredictionCommand{
+				Limit: time.Now().Add(-15 * time.Minute),
+			})
+		}
+	}
 }
 
 func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, svc *ml.Train) {
