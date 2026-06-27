@@ -26,8 +26,6 @@ import (
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
 	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 	"github.com/robfig/cron/v3"
@@ -61,7 +59,7 @@ func run() error {
 	defer func() {
 		_ = sqlDB.Close()
 	}()
-	if err := runPostgresMigrations(sqlDB); err != nil {
+	if err := postgresinfra.RunMigrations(sqlDB); err != nil {
 		log.ErrorContext(ctx, "Error running postgres migrations", "err", err)
 		return err
 	}
@@ -187,26 +185,6 @@ func run() error {
 		return err
 	}
 	return nil
-}
-
-func runPostgresMigrations(db *sql.DB) error {
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
-	if err != nil {
-		return err
-	}
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://internal/infra/postgres/migrations",
-		"postgres",
-		driver,
-	)
-	if err != nil {
-		return err
-	}
-	err = m.Up()
-	if errors.Is(err, migrate.ErrNoChange) {
-		return nil
-	}
-	return err
 }
 
 func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, svc *ml.Train) {
