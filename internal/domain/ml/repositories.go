@@ -1,8 +1,11 @@
 package ml
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
-//go:generate go tool moq -out repositories_mock.go . PredictionRepository SoilMeasureRepository ExecutionRepository HumidityReferenceRepository StatusRepository
+//go:generate go tool moq -out repositories_mock.go . PredictionRepository SoilMeasureRepository ExecutionRepository HumidityReferenceRepository StatusRepository PredictionLogRepository
 type PredictionRepository interface {
 	Get(ctx context.Context) ([]Prediction, error)
 }
@@ -29,4 +32,6 @@ type WateringSkippedLogRepository interface {
 
 type PredictionLogRepository interface {
 	Save(ctx context.Context, pl *PredictionLog) error
+	GetPendingByZone(ctx context.Context, zone string, limit time.Time) (*PredictionLog, error)
+	IsPendingValidationByZone(ctx context.Context, zone string) (bool, error)
 }

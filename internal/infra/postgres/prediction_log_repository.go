@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 	"github.com/uptrace/bun"
@@ -12,6 +15,68 @@ import (
 type PredictionLogRepository struct {
 	db     bun.IDB
 	tracer trace.Tracer
+}
+
+func (p PredictionLogRepository) GetPendingByZone(ctx context.Context, zone string, limit time.Time) (*ml.PredictionLog, error) {
+	ctx, span := p.tracer.Start(ctx, "PredictionLogRepository.GetPendingByZone")
+	defer span.End()
+	model := &modelPrediction{}
+	err := p.db.NewSelect().
+		Model(model).
+		Where("zone = ?", zone).
+		Where("validation_at IS NULL").
+		Where("created_at < ?", limit).
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ml.ErrPredictionLogNotFound
+		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	pl := ml.PredictionLog{}
+	st, err := ml.ParsePredictionLogStatus(model.ValidationStatus)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if err := pl.Hydrate(
+		model.ID,
+		model.Zone,
+		st,
+		model.ShouldWater,
+		model.PredictedSeconds,
+		model.DecisionReason,
+		model.MoistureBefore,
+		model.WateringExecuted,
+		model.TargetMoisture,
+		nil,
+		nil,
+	); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return &pl, nil
+}
+
+func (p PredictionLogRepository) IsPendingValidationByZone(ctx context.Context, zone string) (bool, error) {
+	ctx, span := p.tracer.Start(ctx, "PredictionLogRepository.IsPendingValidationByZone")
+	defer span.End()
+	exists, err := p.db.NewSelect().
+		Model(&modelPrediction{}).
+		Where("zone = ?", zone).
+		Where("validation_at IS NULL").
+		Exists(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return false, err
+	}
+	return exists, nil
 }
 
 func (p PredictionLogRepository) Save(ctx context.Context, pl *ml.PredictionLog) error {

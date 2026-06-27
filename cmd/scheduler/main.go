@@ -22,6 +22,7 @@ import (
 	"github.com/bruli/watersystem-ml/internal/infra/listener"
 	"github.com/bruli/watersystem-ml/internal/infra/memory"
 	"github.com/bruli/watersystem-ml/internal/infra/ntfy"
+	postgresinfra "github.com/bruli/watersystem-ml/internal/infra/postgres"
 	"github.com/bruli/watersystem-ml/internal/infra/python"
 	"github.com/bruli/watersystem-ml/internal/infra/tracing"
 	watersystem "github.com/bruli/watersystem-ml/internal/infra/water_system"
@@ -103,6 +104,7 @@ func run() error {
 	executionRepo := influxdb2.NewExecutionRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
 	humidityRepo := memory.NewHumidityReferenceRepository(conf.BonsaiBigV100, conf.BonsaiBigV40, conf.BonsaiSmallV100, conf.BonsaiSmallV40)
 	waterSkippedLogRepo := influxdb2.NewWateringSkippedLogRepository(conf.InfluxDBURL, conf.InfluxDBToken, conf.InfluxDBOrg, conf.InfluxDBBucket, tracer)
+	predictionLogRepo := postgresinfra.NewPredictionLogRepository(db, tracer)
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
@@ -114,6 +116,8 @@ func run() error {
 		return time.Now().In(loc)
 	})
 	saveWaterSkipLogSvc := ml.NewSaveWateringSkippedLog(waterSkippedLogRepo)
+	validatePredictionLogSvc := ml.NewSavePredictionLog(predictionLogRepo)
+	savePredictionLogSvc := ml.NewSavePredictionLog(predictionLogRepo)
 
 	logChMiddleware := cqs.NewCommandHndErrorMiddleware(log, tracer)
 
@@ -136,6 +140,8 @@ func run() error {
 	commandBus.Subscribe(app.WateringZoneCommandName, logChMiddleware(app.NewWateringZone(executeSvc, tracer)))
 	commandBus.Subscribe(app.PublishMessageCommandName, logChMiddleware(app.NewPublishMessage(ntfyPublisher, tracer)))
 	commandBus.Subscribe(app.SaveWateringSkippedLogCommandName, logChMiddleware(app.NewSaveWateringSkippedLog(saveWaterSkipLogSvc, tracer)))
+	commandBus.Subscribe(app.ValidatePredictionCommandName, logChMiddleware(app.NewSavePredictionLog(validatePredictionLogSvc)))
+	commandBus.Subscribe(app.SavePredictionLogCommandName, logChMiddleware(app.NewSavePredictionLog(savePredictionLogSvc)))
 
 	cronJob, err := buildCron()
 	if err != nil {

@@ -19,12 +19,26 @@ var (
 	ErrInvalidPredictionLogDecisionReason = errors.New("invalid prediction log decision reason")
 	ErrInvalidPredictionLogMoistureBefore = errors.New("invalid prediction log moisture before")
 	ErrInvalidPredictionLogTargetMoisture = errors.New("invalid prediction log target moisture")
+	ErrPredictionLogNotFound              = errors.New("prediction log not found")
 )
 
 type PredictionLogStatus string
 
 func (s PredictionLogStatus) String() string {
 	return string(s)
+}
+
+func ParsePredictionLogStatus(s string) (PredictionLogStatus, error) {
+	switch s {
+	case PredictionLogStatusSuccess.String():
+		return PredictionLogStatusSuccess, nil
+	case PredictionLogStatusFailed.String():
+		return PredictionLogStatusFailed, nil
+	case PredictionLogStatusPending.String():
+		return PredictionLogStatusPending, nil
+	default:
+		return "", errors.New("invalid prediction log status")
+	}
 }
 
 type PredictionLog struct {
@@ -122,6 +136,7 @@ func (l *PredictionLog) validate() error {
 func (l *PredictionLog) Hydrate(
 	id uuid.UUID,
 	zone string,
+	status PredictionLogStatus,
 	shouldWater bool,
 	predictedSeconds float64,
 	decisionReason string,
@@ -141,6 +156,7 @@ func (l *PredictionLog) Hydrate(
 	l.targetMoisture = targetMoisture
 	l.validationAt = validationAt
 	l.moistureAfter = moistureAfter
+	l.status = status
 	return l.validate()
 }
 
