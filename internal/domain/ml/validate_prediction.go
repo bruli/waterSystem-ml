@@ -15,7 +15,7 @@ type ValidatePrediction struct {
 	tracer            trace.Tracer
 }
 
-func (v ValidatePrediction) Validate(ctx context.Context, limit time.Time) ([]*PredictionLog, error) {
+func (v ValidatePrediction) Validate(ctx context.Context, limit time.Time) ([]PredictionLog, error) {
 	ctx, span := v.tracer.Start(ctx, "ValidatePrediction.Validate")
 	defer span.End()
 	moisture, err := v.soilMeasureRepo.Get(ctx)
@@ -24,7 +24,7 @@ func (v ValidatePrediction) Validate(ctx context.Context, limit time.Time) ([]*P
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	predictions := make([]*PredictionLog, len(moisture))
+	predictions := make([]PredictionLog, len(moisture))
 	for i, measure := range moisture {
 		pl, err := v.predictionLogRepo.GetPendingByZone(ctx, measure.Zone(), limit)
 		if err != nil {
@@ -41,7 +41,7 @@ func (v ValidatePrediction) Validate(ctx context.Context, limit time.Time) ([]*P
 			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		}
-		predictions[i] = pl
+		predictions[i] = *pl
 	}
 	return predictions, nil
 }

@@ -33,8 +33,8 @@ func (v ValidatePrediction) Handle(ctx context.Context, cmd cqs.Command) ([]even
 		return nil, err
 	}
 	events := make([]event.Event, 0)
-	for _, p := range pred {
-		events = append(events, p.Events()...)
+	for i := range pred {
+		events = append(events, pred[i].Events()...)
 	}
 	return events, nil
 }
