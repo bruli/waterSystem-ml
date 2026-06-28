@@ -6,11 +6,25 @@ import (
 )
 
 const (
-	WateringSystemSkippedEventName    = "watering_system_skipped"
-	WateringZoneSkippedEventName      = "watering_zone_skipped"
-	WateringRequestedEventName        = "watering_requested"
+	WateringSystemSkippedEventName      = "watering_system_skipped"
+	WateringZoneSkippedEventName        = "watering_zone_skipped"
+	WateringRequestedEventName          = "watering_requested"
+	PredictionValidationFailedEventName = "prediction_validation_failed"
+
 	PredictionPendingValidationReason = "prediction_pending_validation"
 )
+
+type PredictionValidationFailedEvent struct {
+	event.BasicEvent
+	Zone string
+}
+
+func NewPredictionValidationFailedEvent(predictionID uuid.UUID, zone string) *PredictionValidationFailedEvent {
+	return &PredictionValidationFailedEvent{
+		BasicEvent: event.NewBasicEvent(PredictionValidationFailedEventName, uuid.New(), predictionID.String()),
+		Zone:       zone,
+	}
+}
 
 type WateringSystemSkippedEvent struct {
 	event.BasicEvent

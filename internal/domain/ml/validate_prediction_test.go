@@ -46,7 +46,7 @@ func TestValidatePrediction_Validate(t *testing.T) {
 			expectedErr:   errTest,
 		},
 		{
-			name: "and prediction log save returns nil, then it returns nil",
+			name: "and prediction log save returns nil, then it returns nil error",
 			moisture: []ml.SoilMeasure{
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiBigZone, highHumidity)),
 				ptr.FromPointer(ml.NewSoilMeasure(bonsaiSmallZone, highHumidity)),
@@ -72,10 +72,13 @@ func TestValidatePrediction_Validate(t *testing.T) {
 				},
 			}
 			svc := ml.NewValidatePrediction(soilMeasureRepo, predictionLogRepo, buildTracer())
-			err := svc.Validate(t.Context(), time.Now())
+			got, err := svc.Validate(t.Context(), time.Now())
 			if err != nil {
 				require.Equal(t, tt.expectedErr, err)
+				return
 			}
+			require.NotEmpty(t, got)
+			require.Len(t, got, len(tt.moisture))
 		})
 	}
 }

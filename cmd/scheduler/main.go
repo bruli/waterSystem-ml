@@ -137,7 +137,7 @@ func run() error {
 	commandBus.Subscribe(app.WateringZoneCommandName, logChMiddleware(app.NewWateringZone(executeSvc, tracer)))
 	commandBus.Subscribe(app.PublishMessageCommandName, logChMiddleware(app.NewPublishMessage(ntfyPublisher, tracer)))
 	commandBus.Subscribe(app.SaveWateringSkippedLogCommandName, logChMiddleware(app.NewSaveWateringSkippedLog(saveWaterSkipLogSvc, tracer)))
-	commandBus.Subscribe(app.ValidatePredictionCommandName, logChMiddleware(app.NewValidatePrediction(validatePredictionLogSvc)))
+	commandBus.Subscribe(app.ValidatePredictionCommandName, multiCHMdw(app.NewValidatePrediction(validatePredictionLogSvc)))
 	commandBus.Subscribe(app.SavePredictionLogCommandName, logChMiddleware(app.NewSavePredictionLog(savePredictionLogSvc)))
 
 	go runValidatePrediction(ctx, commandBus)

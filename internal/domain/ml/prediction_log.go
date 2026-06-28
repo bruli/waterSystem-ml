@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bruli/go-core/event"
 	"github.com/google/uuid"
 )
 
@@ -42,6 +43,7 @@ func ParsePredictionLogStatus(s string) (PredictionLogStatus, error) {
 }
 
 type PredictionLog struct {
+	event.BasicAggregateRoot
 	id               uuid.UUID
 	createdAt        time.Time
 	zone             string
@@ -116,6 +118,10 @@ func (l *PredictionLog) TargetMoisture() float64 {
 	return l.targetMoisture
 }
 
+func (l *PredictionLog) IsFailed() bool {
+	return l.status == PredictionLogStatusFailed
+}
+
 func (l *PredictionLog) validate() error {
 	switch {
 	case l.id == uuid.Nil:
@@ -171,6 +177,9 @@ func (l *PredictionLog) AddValidation(at *time.Time, moistureAfter *float64) {
 			l.status = PredictionLogStatusFailed
 		}
 	}
+	if l.IsFailed() {
+		l.Record(NewPredictionValidationFailedEvent(l.id, l.zone))
+	}
 }
 
 func NewPredictionLog(
@@ -184,16 +193,17 @@ func NewPredictionLog(
 	targetMoisture float64,
 ) (*PredictionLog, error) {
 	pl := PredictionLog{
-		id:               id,
-		zone:             zone,
-		shouldWater:      shouldWater,
-		predictedSeconds: predictedSeconds,
-		decisionReason:   decisionReason,
-		moistureBefore:   moistureBefore,
-		wateringExecuted: wateringExecuted,
-		targetMoisture:   targetMoisture,
-		createdAt:        time.Now(),
-		status:           PredictionLogStatusPending,
+		BasicAggregateRoot: event.NewBasicAggregateRoot(),
+		id:                 id,
+		zone:               zone,
+		shouldWater:        shouldWater,
+		predictedSeconds:   predictedSeconds,
+		decisionReason:     decisionReason,
+		moistureBefore:     moistureBefore,
+		wateringExecuted:   wateringExecuted,
+		targetMoisture:     targetMoisture,
+		createdAt:          time.Now(),
+		status:             PredictionLogStatusPending,
 	}
 
 	if err := pl.validate(); err != nil {

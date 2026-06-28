@@ -28,7 +28,15 @@ func (v ValidatePrediction) Handle(ctx context.Context, cmd cqs.Command) ([]even
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(ValidatePredictionCommandName, cmd.Name())
 	}
-	return nil, v.svc.Validate(ctx, co.Limit)
+	pred, err := v.svc.Validate(ctx, co.Limit)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]event.Event, 0)
+	for _, p := range pred {
+		events = append(events, p.Events()...)
+	}
+	return events, nil
 }
 
 func NewValidatePrediction(svc *ml.ValidatePrediction) *ValidatePrediction {
