@@ -4,25 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bruli/go-core/cqs"
 	"github.com/bruli/go-core/event"
-	"github.com/bruli/watersystem-ml/internal/app"
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 )
 
 type TrainModelOnZoneModelDegraded struct {
-	ch cqs.CommandHandler
+	ch chan struct{ Zone string }
 }
 
 func (t TrainModelOnZoneModelDegraded) Listen(ctx context.Context, ev event.Event) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+
+	}
 	zmd, ok := ev.(*ml.ZoneModelDegradedEvent)
 	if !ok {
 		return fmt.Errorf("invalid event type: %T", ev)
 	}
-	_, _ = t.ch.Handle(ctx, app.TrainingZoneCommand{Zone: zmd.Zone})
+	t.ch <- struct{ Zone string }{Zone: zmd.Zone}
 	return nil
 }
 
-func NewTrainModelOnZoneModelDegraded(ch cqs.CommandHandler) *TrainModelOnZoneModelDegraded {
+func NewTrainModelOnZoneModelDegraded(ch chan struct{ Zone string }) *TrainModelOnZoneModelDegraded {
 	return &TrainModelOnZoneModelDegraded{ch: ch}
 }

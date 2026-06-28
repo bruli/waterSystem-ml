@@ -118,6 +118,9 @@ func run() error {
 	savePredictionLogSvc := ml.NewSavePredictionLog(predictionLogRepo)
 	checkModelSvc := ml.NewCheckModel(modelHealthRepo, tracer)
 
+	trainCh := make(chan struct{ Zone string })
+	defer close(trainCh)
+
 	logChMiddleware := cqs.NewCommandHndErrorMiddleware(log, tracer)
 
 	commandBus := cqs.NewCommandBus()
@@ -127,7 +130,7 @@ func run() error {
 	saveWaterSkippedLogWZList := listener.NewSaveWateringSkippedLogOnWateringZoneSkipped(commandBus)
 	saveWaterSkippedLogWSList := listener.NewSaveWateringSkippedLogOnWateringSystemSkipped(commandBus)
 	checkModelPredValFailedList := listener.NewCheckModelOnPredictionValidationFailed(commandBus)
-	trainModelZoneModelDegradedList := listener.NewTrainModelOnZoneModelDegraded(commandBus)
+	trainModelZoneModelDegradedList := listener.NewTrainModelOnZoneModelDegraded(trainCh)
 
 	eventBus := event.NewBus()
 	eventBus.Subscribe(ml.WateringRequestedEventName, publishMsgList, execWatOnWaterSysList)
@@ -154,6 +157,7 @@ func run() error {
 	defer close(errCh)
 
 	go initialTraining(ctx, conf, log, commandBus)
+	go runTrainingZone(ctx, log, trainCh, commandBus)
 	go runCalculateWatering(ctx, commandBus)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
@@ -182,6 +186,22 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func runTrainingZone(ctx context.Context, log *slog.Logger, ch <-chan struct{ Zone string }, bus cqs.CommandBus) {
+	log.InfoContext(ctx, "Starting training zone worker")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case zone, ok := <-ch:
+			if !ok {
+				log.InfoContext(ctx, "Training zone channel closed. Worker stopped")
+				return
+			}
+			_, _ = bus.Handle(ctx, app.TrainingZoneCommand{Zone: zone.Zone})
+		}
+	}
 }
 
 func runValidatePrediction(ctx context.Context, bus cqs.CommandBus) {
