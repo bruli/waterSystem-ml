@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/bruli/go-core/cqs"
@@ -106,11 +107,8 @@ func run() error {
 
 	trainSvc := ml.NewTrain(trainExecutor, tracer)
 	executeSvc := watering.NewExecute(waterSystemExecutor, tracer)
+	loc := buildTimeLocation(ctx, log)
 	calculateSvc := ml.NewCalculate(predictionRepo, soilMeasureRepo, humidityRepo, executionRepo, predictionLogRepo, waterSystemExecutor, tracer, func() time.Time {
-		loc, err := time.LoadLocation("Europe/Madrid")
-		if err != nil {
-			log.ErrorContext(ctx, "Error loading location", "err", err)
-		}
 		return time.Now().In(loc)
 	})
 	saveWaterSkipLogSvc := ml.NewSaveWateringSkippedLog(waterSkippedLogRepo)
@@ -151,14 +149,14 @@ func run() error {
 	commandBus.Subscribe(app.CheckFailedModelCommandName, multiCHMdw(app.NewCheckFailedModel(checkModelSvc)))
 	commandBus.Subscribe(app.TrainingZoneCommandName, logChMiddleware(app.NewTrainingZone(trainSvc)))
 
-	go runValidatePrediction(ctx, commandBus)
+	go runValidatePrediction(ctx, commandBus, log)
 
 	errCh := make(chan error)
 	defer close(errCh)
 
 	go initialTraining(ctx, conf, log, commandBus)
 	go runTrainingZone(ctx, log, trainCh, commandBus)
-	go runCalculateWatering(ctx, commandBus)
+	go runCalculateWatering(ctx, commandBus, log)
 
 	serverListener, err := net.Listen("tcp", conf.ServerHost)
 	log.InfoContext(ctx, "Starting server", "host", conf.ServerHost)
@@ -188,6 +186,15 @@ func run() error {
 	return nil
 }
 
+func buildTimeLocation(ctx context.Context, log *slog.Logger) *time.Location {
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		log.ErrorContext(ctx, "Error loading location, using local time", "err", err)
+		loc = time.Local
+	}
+	return loc
+}
+
 func runTrainingZone(ctx context.Context, log *slog.Logger, ch <-chan struct{ Zone string }, bus cqs.CommandBus) {
 	log.InfoContext(ctx, "Starting training zone worker")
 	for {
@@ -199,12 +206,15 @@ func runTrainingZone(ctx context.Context, log *slog.Logger, ch <-chan struct{ Zo
 				log.InfoContext(ctx, "Training zone channel closed. Worker stopped")
 				return
 			}
-			_, _ = bus.Handle(ctx, app.TrainingZoneCommand{Zone: zone.Zone})
+			func() {
+				defer recoverBackground(ctx, log, "training zone")
+				_, _ = bus.Handle(ctx, app.TrainingZoneCommand{Zone: zone.Zone})
+			}()
 		}
 	}
 }
 
-func runValidatePrediction(ctx context.Context, bus cqs.CommandBus) {
+func runValidatePrediction(ctx context.Context, bus cqs.CommandBus, log *slog.Logger) {
 	tick := time.NewTicker(15 * time.Minute)
 	defer tick.Stop()
 	for {
@@ -212,14 +222,18 @@ func runValidatePrediction(ctx context.Context, bus cqs.CommandBus) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			_, _ = bus.Handle(ctx, app.ValidatePredictionCommand{
-				Limit: time.Now().Add(-15 * time.Minute),
-			})
+			func() {
+				defer recoverBackground(ctx, log, "validate prediction")
+				_, _ = bus.Handle(ctx, app.ValidatePredictionCommand{
+					Limit: time.Now().Add(-15 * time.Minute),
+				})
+			}()
 		}
 	}
 }
 
 func initialTraining(ctx context.Context, conf *config.Config, log *slog.Logger, ch cqs.CommandHandler) {
+	defer recoverBackground(ctx, log, "initial training")
 	exists, empty, err := checkDir(conf.ModelDir)
 	if err != nil {
 		log.ErrorContext(ctx, "Error checking model dir", "err", err)
@@ -264,7 +278,7 @@ func checkDir(path string) (exists, empty bool, err error) {
 	return true, true, nil
 }
 
-func runCalculateWatering(ctx context.Context, ch cqs.CommandHandler) {
+func runCalculateWatering(ctx context.Context, ch cqs.CommandHandler, log *slog.Logger) {
 	tick := time.NewTicker(15 * time.Minute)
 	defer tick.Stop()
 
@@ -274,8 +288,11 @@ func runCalculateWatering(ctx context.Context, ch cqs.CommandHandler) {
 			return
 		case <-tick.C:
 			runCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-			_, _ = ch.Handle(runCtx, app.CalculateWateringCommand{})
-			cancel()
+			func() {
+				defer cancel()
+				defer recoverBackground(runCtx, log, "calculate watering")
+				_, _ = ch.Handle(runCtx, app.CalculateWateringCommand{})
+			}()
 		}
 	}
 }
@@ -294,8 +311,18 @@ func buildLog(level string) *slog.Logger {
 	})
 
 	log := slog.New(handler)
-	log.With("service", serviceName)
-	return log
+	return log.With("service", serviceName)
+}
+
+func recoverBackground(ctx context.Context, log *slog.Logger, worker string) {
+	if r := recover(); r != nil {
+		log.ErrorContext(ctx,
+			"panic in background worker",
+			slog.String("worker", worker),
+			slog.Any("panic", r),
+			slog.String("stack", string(debug.Stack())),
+		)
+	}
 }
 
 func runHTTPServer(ctx context.Context, srv *http.Server, log *slog.Logger, serverListener net.Listener) error {
