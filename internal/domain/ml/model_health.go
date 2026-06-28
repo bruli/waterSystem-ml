@@ -37,6 +37,12 @@ func (m *ModelHealth) isDegraded() bool {
 	return m.failureRate() >= m.maxFailureRate
 }
 
+func (m *ModelHealth) Check() {
+	if m.isDegraded() {
+		m.Record(NewZoneModelDegradedEvent(m.zone))
+	}
+}
+
 func NewModelHealth(zone string, successfulPredictions, failedPredictions int) *ModelHealth {
 	return &ModelHealth{
 		BasicAggregateRoot:    event.BasicAggregateRoot{},

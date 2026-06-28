@@ -24,3 +24,8 @@ type modelPrediction struct {
 	MoistureAfter    *float64
 	ReachedTarget    *bool
 }
+
+type resultPrediction struct {
+	SuccessfulPredictions int `bun:"successful_predictions"`
+	FailedPredictions     int `bun:"failed_predictions"`
+}

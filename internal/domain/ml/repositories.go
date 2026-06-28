@@ -35,3 +35,7 @@ type PredictionLogRepository interface {
 	GetPendingByZone(ctx context.Context, zone string, limit time.Time) (*PredictionLog, error)
 	GetPendingValidationZones(ctx context.Context) (map[string]bool, error)
 }
+
+type ModelHealthRepository interface {
+	GetModelHealth(ctx context.Context, zone string) (*ModelHealth, error)
+}
