@@ -10,9 +10,22 @@ const (
 	WateringZoneSkippedEventName        = "watering_zone_skipped"
 	WateringRequestedEventName          = "watering_requested"
 	PredictionValidationFailedEventName = "prediction_validation_failed"
+	ZoneModelDegradedEventName          = "zone_model_degraded"
 
 	PredictionPendingValidationReason = "prediction_pending_validation"
 )
+
+type ZoneModelDegradedEvent struct {
+	event.BasicEvent
+	Zone string
+}
+
+func NewZoneModelDegradedEvent(zone string) *ZoneModelDegradedEvent {
+	return &ZoneModelDegradedEvent{
+		BasicEvent: event.NewBasicEvent(ZoneModelDegradedEventName, uuid.New(), uuid.NewString()),
+		Zone:       zone,
+	}
+}
 
 type PredictionValidationFailedEvent struct {
 	event.BasicEvent
