@@ -54,8 +54,13 @@ type PredictionLog struct {
 	wateringExecuted bool
 	status           PredictionLogStatus
 	targetMoisture   float64
+	validateAfter    time.Time
 	validationAt     *time.Time
 	moistureAfter    *float64
+}
+
+func (l *PredictionLog) ValidateAfter() time.Time {
+	return l.validateAfter
 }
 
 func (l *PredictionLog) ValidationAt() *time.Time {
@@ -151,6 +156,7 @@ func (l *PredictionLog) Hydrate(
 	targetMoisture float64,
 	validationAt *time.Time,
 	moistureAfter *float64,
+	validateAfter time.Time,
 ) error {
 	l.id = id
 	l.zone = zone
@@ -163,6 +169,7 @@ func (l *PredictionLog) Hydrate(
 	l.validationAt = validationAt
 	l.moistureAfter = moistureAfter
 	l.status = status
+	l.validateAfter = validateAfter
 	return l.validate()
 }
 
@@ -192,6 +199,7 @@ func NewPredictionLog(
 	wateringExecuted bool,
 	targetMoisture float64,
 ) (*PredictionLog, error) {
+	now := time.Now()
 	pl := PredictionLog{
 		BasicAggregateRoot: event.NewBasicAggregateRoot(),
 		id:                 id,
@@ -202,8 +210,9 @@ func NewPredictionLog(
 		moistureBefore:     moistureBefore,
 		wateringExecuted:   wateringExecuted,
 		targetMoisture:     targetMoisture,
-		createdAt:          time.Now(),
+		createdAt:          now,
 		status:             PredictionLogStatusPending,
+		validateAfter:      now.Add(15 * time.Minute),
 	}
 
 	if err := pl.validate(); err != nil {

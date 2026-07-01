@@ -219,7 +219,7 @@ func runTrainingZone(ctx context.Context, log *slog.Logger, ch <-chan struct{ Zo
 }
 
 func runValidatePrediction(ctx context.Context, bus cqs.CommandBus, log *slog.Logger) {
-	tick := time.NewTicker(15 * time.Minute)
+	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	for {
 		select {
@@ -229,7 +229,7 @@ func runValidatePrediction(ctx context.Context, bus cqs.CommandBus, log *slog.Lo
 			func() {
 				defer recoverBackground(ctx, log, "validate prediction")
 				_, _ = bus.Handle(ctx, app.ValidatePredictionCommand{
-					Limit: time.Now().Add(-15 * time.Minute),
+					Limit: time.Now(),
 				})
 			}()
 		}

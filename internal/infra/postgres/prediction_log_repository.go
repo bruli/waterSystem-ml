@@ -8,6 +8,7 @@ import (
 
 	"github.com/bruli/watersystem-ml/internal/domain/ml"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/schema"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -25,7 +26,8 @@ func (p PredictionLogRepository) GetPendingByZone(ctx context.Context, zone stri
 		Model(model).
 		Where("zone = ?", zone).
 		Where("validation_at IS NULL").
-		Where("created_at < ?", limit).
+		Where("validate_after <= ?", limit).
+		OrderBy("validate_after", schema.OrderDesc).
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
@@ -55,6 +57,7 @@ func (p PredictionLogRepository) GetPendingByZone(ctx context.Context, zone stri
 		model.TargetMoisture,
 		nil,
 		nil,
+		model.ValidateAfter,
 	); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -122,6 +125,7 @@ func buildModel(pl *ml.PredictionLog) *modelPrediction {
 		ValidationAt:     pl.ValidationAt(),
 		MoistureAfter:    pl.MoistureAfter(),
 		ReachedTarget:    pl.ReachedTarget(),
+		ValidateAfter:    pl.ValidateAfter(),
 	}
 }
 

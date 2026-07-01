@@ -23,6 +23,7 @@ type modelPrediction struct {
 	ValidationAt     *time.Time
 	MoistureAfter    *float64
 	ReachedTarget    *bool
+	ValidateAfter    time.Time
 }
 
 type resultPrediction struct {
