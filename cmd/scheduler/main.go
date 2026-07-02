@@ -118,7 +118,7 @@ func run() error {
 	checkModelSvc := ml.NewCheckModel(modelHealthRepo, tracer)
 	saveModelTrainingSvc := ml.NewSaveModelTrainingLog(modelTrainingRepo)
 
-	trainCh := make(chan struct{ Zone string })
+	trainCh := make(chan struct{ Zone string }, 1)
 	defer close(trainCh)
 
 	logChMiddleware := cqs.NewCommandHndErrorMiddleware(log, tracer)
