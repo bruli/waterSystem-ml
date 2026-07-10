@@ -11,6 +11,7 @@ resources:
   - externalsecret-ntfy.yaml
   - externalsecret-postgres.yaml
   - externalsecret-watersystem.yaml
+  - externalsecret-ghrc.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: watersystem-ml
