@@ -219,7 +219,7 @@ jobs:
           set -euo pipefail
 
           docker push \
-            "ghcr.io/bruli/watersystem-ml:latest"
+            "ghcr.io/bruli-lab/watersystem-ml:latest"
 
       - name: Update deployment image tag
         env:
