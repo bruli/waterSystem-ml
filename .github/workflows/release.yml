@@ -193,8 +193,8 @@ jobs:
           load: true
           push: false
           tags: |
-            ghcr.io/bruli/watersystem-ml:v${{ needs.release.outputs.version }}
-            ghcr.io/bruli/watersystem-ml:latest
+            ghcr.io/bruli-lab/watersystem-ml:v${{ needs.release.outputs.version }}
+            ghcr.io/bruli-lab/watersystem-ml:latest
 
       - name: Scan final image
         run: |
@@ -205,14 +205,14 @@ jobs:
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
-            "ghcr.io/bruli/watersystem-ml:v${{ needs.release.outputs.version }}"
+            "ghcr.io/bruli-lab/watersystem-ml:v${{ needs.release.outputs.version }}"
 
       - name: Push versioned image
         run: |
           set -euo pipefail
 
           docker push \
-            "ghcr.io/bruli/watersystem-ml:v${{ needs.release.outputs.version }}"
+            "ghcr.io/bruli-lab/watersystem-ml:v${{ needs.release.outputs.version }}"
 
       - name: Push latest image
         run: |
@@ -228,7 +228,7 @@ jobs:
           set -euo pipefail
 
           sed -i \
-            "s|ghcr.io/bruli/watersystem-ml:[^[:space:]]*|ghcr.io/bruli/watersystem-ml:${VERSION}|g" \
+            "s|ghcr.io/bruli-lab/watersystem-ml:[^[:space:]]*|ghcr.io/bruli-lab/watersystem-ml:${VERSION}|g" \
             "${DEPLOYMENT_FILE}"
 
           if git diff --quiet -- "${DEPLOYMENT_FILE}"; then

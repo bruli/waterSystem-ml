@@ -35,7 +35,7 @@ spec:
 
       containers:
         - name: watersystem-ml
-          image: ghcr.io/bruli/watersystem-ml:v1.11.2
+          image: ghcr.io/bruli-lab/watersystem-ml:v1.11.2
           imagePullPolicy: IfNotPresent
 
           securityContext:
