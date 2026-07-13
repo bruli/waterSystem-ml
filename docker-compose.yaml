@@ -45,7 +45,7 @@ services:
     command: ["air", "-c", ".air.toml"]
 
   influxdb:
-    image: influxdb:2.7
+    image: influxdb:2.9
     container_name: influxdb
     ports:
       - "8086:8086"
