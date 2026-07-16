@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -o /app/bin/watersystem-ml ./cmd/scheduler
 
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
